@@ -8,14 +8,14 @@ using System.Linq;
 using System.Net.Http;
 using System.Reflection;
 using System.Threading.Tasks;
-using Portia.Core;
+using PortiaObjectOriented.Core;
 
-namespace Portia
+namespace PortiaObjectOriented
 {
     public static class Webcrawler
     {
-        static ConcurrentDictionary<object, XpathAttribute[]> properties = new ConcurrentDictionary<object, XpathAttribute[]>();
-        static XpathAttribute[] xpathAttributes;
+        private static ConcurrentDictionary<object, XpathAttribute[]> properties = new ConcurrentDictionary<object, XpathAttribute[]>();
+        private static XpathAttribute[] xpathAttributes;
         public static async Task<List<object>> StartCrawlerAsync<T>(string rootUrl, List<string> blacklistedWords)
         {
             object rootObject = Activator.CreateInstance(typeof(T));
@@ -125,7 +125,7 @@ namespace Portia
             return false;
         }
 
-        static object CreateInstanceAndMapHtmlNode(Type type, HtmlNode htmlNode, string url)
+        private static object CreateInstanceAndMapHtmlNode(Type type, HtmlNode htmlNode, string url)
         {
             object objectInstance = Activator.CreateInstance(type);
             Type objectType = objectInstance.GetType();
@@ -207,7 +207,7 @@ namespace Portia
             return objectInstance;
         }
 
-        static bool IsAnyValueAssigned(object myObject)
+        private static bool IsAnyValueAssigned(object myObject)
         {
             foreach (PropertyInfo pi in myObject.GetType().GetProperties())
             {

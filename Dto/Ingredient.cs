@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Portia.Core;
+using PortiaObjectOriented.Core;
 
-namespace Portia.Dto
+namespace PortiaObjectOriented.Dto
 {
     [Xpath(".//div/section[1]/section/div[2]/div/div[1]/div[2]/div/div/ul/li")]
     public class Ingredient

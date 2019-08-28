@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Portia.Core
+namespace PortiaObjectOriented.Core
 {
     public class XpathAttribute : Attribute
     {

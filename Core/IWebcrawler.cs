@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Portia.Core;
+using PortiaObjectOriented.Core;
 
-namespace Portia
+namespace PortiaObjectOriented
 {
     interface IWebcrawler
     {
