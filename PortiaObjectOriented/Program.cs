@@ -19,8 +19,5 @@ namespace PortiaObjectOriented
             var json = JsonConvert.SerializeObject(list, Formatting.Indented);
             System.IO.File.WriteAllText("result.json", json);
         }
-
-
-
     }
 }

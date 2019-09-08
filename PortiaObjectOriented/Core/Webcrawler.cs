@@ -16,6 +16,8 @@ namespace PortiaObjectOriented
     {
         private static ConcurrentDictionary<object, XpathAttribute[]> properties = new ConcurrentDictionary<object, XpathAttribute[]>();
         private static XpathAttribute[] xpathAttributes;
+        private static string dequeuedUrlsFile = "dequeuedUrls.txt";
+        private static string allQueuedUrlsFile = "allQueuedUrls.txt";
         public static async Task<List<object>> StartCrawlerAsync<T>(string rootUrl, List<string> blacklistedWords)
         {
             object rootObject = Activator.CreateInstance(typeof(T));
@@ -29,10 +31,8 @@ namespace PortiaObjectOriented
                 queue.Enqueue(rootUri); // Add root page to queue
 
                 #region Debugging
-                string dequeuedUrls = "dequeuedUrls.txt";
-                File.WriteAllText(dequeuedUrls, String.Empty);
-                string allQueuedUrls = "allQueuedUrls.txt";
-                File.WriteAllText(allQueuedUrls, String.Empty);
+                File.WriteAllText(dequeuedUrlsFile, String.Empty);
+                File.WriteAllText(allQueuedUrlsFile, String.Empty);
                 int crawledUrlsCount = 0;
                 #endregion
 
@@ -40,7 +40,7 @@ namespace PortiaObjectOriented
                 {
                     Uri currentUrl = (Uri)queue.Dequeue();
                     visitedUrls.Add(currentUrl);
-                    File.AppendAllText(dequeuedUrls, currentUrl.ToString() + Environment.NewLine);
+                    File.AppendAllText(dequeuedUrlsFile, currentUrl.ToString() + Environment.NewLine);
                     crawledUrlsCount++;
 
                     using (HttpClient httpClient = new HttpClient())
@@ -60,7 +60,6 @@ namespace PortiaObjectOriented
                         htmlDoc.LoadHtml(html);
 
                         #region Elements to look for
-
                         xpathAttributes = properties.GetOrAdd(rootObjectType, x => (XpathAttribute[])rootObjectType.GetCustomAttributes(typeof(XpathAttribute), false));
                         HtmlNodeCollection elements = htmlDoc.DocumentNode.SelectNodes(xpathAttributes[0].NodeXpath);
                         if (elements != null)
@@ -77,28 +76,7 @@ namespace PortiaObjectOriented
                         #endregion
 
                         #region Breadth-first traversing
-                        var aTags = htmlDoc.DocumentNode.SelectNodes("//a[@href]");
-                        if (aTags != null)
-                        {
-                            foreach (var aTag in aTags)
-                            {
-                                string hrefValue = aTag.Attributes["href"].Value;
-                                Uri url = new Uri(hrefValue, UriKind.RelativeOrAbsolute);
-                                url = new Uri(rootUri, url);
-                                if (url.OriginalString.Contains(rootUri.OriginalString) == true)
-                                {
-                                    if (queue.Contains(url) == false && visitedUrls.Contains(url) == false)
-                                    {
-                                        if (!ContainsBlacklistedWord(url, blacklistedWords)) //BLACKLIST CHECK
-                                        {
-                                            queue.Enqueue(url);
-
-                                            File.AppendAllText(allQueuedUrls, url.ToString() + Environment.NewLine);
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        TraverseUrlsInHtmlDocument(blacklistedWords, rootUri, queue, visitedUrls, htmlDoc);
                         #endregion
                         Console.Write("\rUrls in queue: {0} - Urls visited: {1} - Items successfully crawled: {2}", queue.Count, crawledUrlsCount, items.Count);
                     }
@@ -111,6 +89,32 @@ namespace PortiaObjectOriented
                 return null;
             }
 
+        }
+
+        private static void TraverseUrlsInHtmlDocument(List<string> blacklistedWords, Uri rootUri, Queue queue, List<Uri> visitedUrls, HtmlDocument htmlDoc)
+        {
+            var aTags = htmlDoc.DocumentNode.SelectNodes("//a[@href]");
+            if (aTags != null)
+            {
+                foreach (var aTag in aTags)
+                {
+                    string hrefValue = aTag.Attributes["href"].Value;
+                    Uri url = new Uri(hrefValue, UriKind.RelativeOrAbsolute);
+                    url = new Uri(rootUri, url);
+                    if (url.OriginalString.Contains(rootUri.OriginalString) == true)
+                    {
+                        if (queue.Contains(url) == false && visitedUrls.Contains(url) == false)
+                        {
+                            if (!ContainsBlacklistedWord(url, blacklistedWords)) //BLACKLIST CHECK
+                            {
+                                queue.Enqueue(url);
+
+                                File.AppendAllText(allQueuedUrlsFile, url.ToString() + Environment.NewLine);
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         private static bool ContainsBlacklistedWord(Uri url, List<string> blacklistedWords)

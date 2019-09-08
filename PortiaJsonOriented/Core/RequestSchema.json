@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "JSON Schema for the RequestSchema",
+  "type": "object",
+  "required": [
+    "apiVersion",
+    "data"
+  ],
+  "properties": {
+    "apiVersion": {
+      "type": "string",
+      "pattern": "^(.*)$"
+    },
+    "data": {
+      "type": "object",
+      "required": [
+        "url",
+        "projectName",
+        "items"
+      ],
+      "properties": {
+        "url": {
+          "type": "string",
+          "pattern": "^(.*)$"
+        },
+        "projectName": {
+          "type": "string",
+          "pattern": "^(.*)$"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/TPNode"
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "TPNode": {
+      "type": "object",
+      "required": [
+        "name",
+        "type",
+        "isMultiple",
+        "xpath"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "isMultiple": {
+          "type": "boolean"
+        },
+        "xpath": {
+          "type": "string"
+        },
+        "attributes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/TPNode"
+          }
+        }
+      }
+    }
+  }
+}
+
+
+
