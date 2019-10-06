@@ -57,176 +57,85 @@ namespace PortiaJsonOriented
                 htmlDoc.LoadHtml(html);
                 HtmlNode documentNode = htmlDoc.DocumentNode;
 
-                //// Iterate over Attributes in an item
-                ////// Create property name for attribute
-                ////// If MultipleFromPage create JArray
-                //////// Check type of attribute
-                //////// If basic type add directly to propertyValue
-                //////// If object type iterate over attribute.properties.
-
-                // Iterate over projects in request.data
                 foreach (Data project in request.Data)
                 {
-                    JObject rootObject = new JObject();
-                    //// Iterate over items in a project.Items
+                    JObject projectObject = new JObject();
                     foreach (NodeAttribute item in project.Items)
                     {
-                        JToken value = GetValueForJToken(item, documentNode);
-                        rootObject.Add(item.Name, value);
-                        //DoSomethingFromAttribute(item, documentNode); // returns product
+                        JToken value = GetValueForJTokenRecursive(item, documentNode);
+                        projectObject.Add(item.Name, value);
                     }
-                    projects[project.ProjectName].Add(rootObject);
+                    projects[project.ProjectName].Add(projectObject);
                 }
-
-
-
-
-
-                // check if isMultiple.
-                //// if isMultiple == true create instance of array.
-                // check type of item.
-                //// if type is object iterate over its properties.
-                var bla = request.Data[0].Items;
-
                 AddNewUrlsToQueue(new List<string>(), rootUri, ref queue, visitedUrls, htmlDoc);
-
             }
             return "";
         }
-
-        // PropertyName, IsMultiple, PropertyType, PropertyValue
-
-        private static JToken GetValueForJToken(NodeAttribute node, HtmlNode htmlNode)
+        private static JToken GetValueForJTokenRecursive(NodeAttribute node, HtmlNode htmlNode)
         {
             JToken jToken;
             if (node.MultipleFromPage) // TODO
             {
-                jToken = GetMultipleNodeValue(node, htmlNode);
-            }
-            else
-            {
-                jToken = GetSingleNodeValue(node, htmlNode);
-            }
-
-            return jToken;
-        }
-
-        private static JArray GetMultipleNodeValue(NodeAttribute node, HtmlNode htmlNode)
-        {
-            JArray jArray = new JArray();
-            if (node.Type.ToLower() == "string" || node.Type.ToLower() == "number" || node.Type.ToLower() == "boolean") // basic types
-            {
-                HtmlNodeCollection elements = htmlNode.SelectNodes(node.Xpath);
-                foreach (var element in elements)
-                {
-                    jArray.Add(GetSingleNodeValue(node, htmlNode));
-                }
-            }
-            else if (node.Type.ToLower() == "object" && node.Attributes.Count > 0) // complex types
-            {
-                HtmlNodeCollection elements = htmlNode.SelectNodes(node.Xpath);
-                //foreach (var element in elements)
-                //{
-                //    JObject jObject = new JObject();
-                //    foreach (var attribute in node.Attributes)
-                //    {
-                //        JToken value = GetSingleNodeValue(attribute, element);
-                //        jObject.Add(attribute.Name, value);
-                //    }
-                //    jArray.Add(jObject);
-                //}
-
-            }
-            else
-            { // TODO add prober error handling. return list of errors that occurred.
-
-            }
-            return jArray;
-        }
-
-        private static JToken GetSingleNodeValue(NodeAttribute node, HtmlNode htmlNode)
-        {
-            JToken jToken;
-            HtmlNodeNavigator navigator = (HtmlNodeNavigator)htmlNode.CreateNavigator();
-            if (node.Type.ToLower() == "string" || node.Type.ToLower() == "number" || node.Type.ToLower() == "boolean") // basic types
-            {
-                XPathNavigator nodeFound = navigator.SelectSingleNode(node.Xpath);
-                // Get as Type
-                jToken = nodeFound.Value;
-            }
-            else if (node.Type.ToLower() == "object" && node.Attributes.Count > 0) // complex types
-            {
-                JObject jObject = new JObject();
-                HtmlNode element = htmlNode.SelectSingleNode(node.Xpath);
-                foreach (var attribute in node.Attributes)
-                {
-                    JToken value = GetValueForJToken(attribute, element);
-                    jObject.Add(attribute.Name, value);
-                }
-                jToken = jObject;
-            }
-            else
-            { // TODO add prober error handling. return list of errors that occurred.
-                jToken = "ERROR OCCURED";
-            }
-            return jToken;
-        }
-
-
-
-
-        private static void DoSomethingFromAttribute(NodeAttribute node, HtmlNode htmlNode)
-        {
-            HtmlNodeNavigator navigator = (HtmlNodeNavigator)htmlNode.CreateNavigator();
-            if (node.MultipleFromPage)
-            {
                 JArray jArray = new JArray();
-            }
-            else
-            {
-                JObject jObject = new JObject();
                 if (node.Type.ToLower() == "string" || node.Type.ToLower() == "number" || node.Type.ToLower() == "boolean") // basic types
                 {
-                    var nodeFound = navigator.SelectSingleNode(node.Xpath);
-                    // Get as Type
-                    var value = nodeFound.Value;
-                    jObject.Add(node.Name, value);
+                    HtmlNodeCollection elements = htmlNode.SelectNodes(node.Xpath);
+                    foreach (var element in elements)
+                    {
+                        HtmlNodeNavigator navigator = (HtmlNodeNavigator)element.CreateNavigator();
+                        jArray.Add(navigator.Value);
+                    }
+                    jToken = jArray;
                 }
                 else if (node.Type.ToLower() == "object" && node.Attributes.Count > 0) // complex types
                 {
-                    HtmlNode element = htmlNode.SelectSingleNode(node.Xpath);
-                    foreach (var attribute in node.Attributes)
+                    HtmlNodeCollection elements = htmlNode.SelectNodes(node.Xpath);
+                    JObject jObject = new JObject();
+                    foreach (var element in elements)
                     {
-                        DoSomethingFromAttribute(attribute, element);
+
+                        foreach (var attribute in node.Attributes)
+                        {
+                            JToken value = GetValueForJTokenRecursive(attribute, element);
+                            jObject.Add(attribute.Name, value);
+                        }
+                        jArray.Add(jObject);
                     }
+                    jToken = jArray;
                 }
                 else
                 { // TODO add prober error handling. return list of errors that occurred.
-
+                    jToken = "ERROR OCCURED";
                 }
             }
-            //return new ClassDefinition(node.Name, type, node.Xpath);
-        }
-
-
-
-
-        private static string GetXpath(List<Core.Models.NodeAttribute> attributes)
-        {
-            foreach (Core.Models.NodeAttribute item in attributes)
+            else
             {
-                if (item.Type == "object")
+                HtmlNodeNavigator navigator = (HtmlNodeNavigator)htmlNode.CreateNavigator();
+                if (node.Type.ToLower() == "string" || node.Type.ToLower() == "number" || node.Type.ToLower() == "boolean") // basic types
                 {
-                    return GetXpath(item.Attributes);
+                    XPathNavigator nodeFound = navigator.SelectSingleNode(node.Xpath);
+                    // Get as Type
+                    jToken = nodeFound.Value;
+                }
+                else if (node.Type.ToLower() == "object" && node.Attributes.Count > 0) // complex types
+                {
+                    JObject jObject = new JObject();
+                    HtmlNode element = htmlNode.SelectSingleNode(node.Xpath);
+                    foreach (var attribute in node.Attributes)
+                    {
+                        JToken value = GetValueForJTokenRecursive(attribute, element);
+                        jObject.Add(attribute.Name, value);
+                    }
+                    jToken = jObject;
                 }
                 else
-                {
-                    return item.Xpath;
+                { // TODO add prober error handling. return list of errors that occurred.
+                    jToken = "ERROR OCCURED";
                 }
             }
-            return GetXpath(attributes);
-        }
 
+            return jToken;
+        }
         private static void AddNewUrlsToQueue(List<string> blacklistedWords, Uri rootUri, ref Queue queue, List<Uri> visitedUrls, HtmlDocument htmlDoc)
         {
             var aTags = htmlDoc.DocumentNode.SelectNodes("//a[@href]");
@@ -250,7 +159,6 @@ namespace PortiaJsonOriented
                 }
             }
         }
-
         private static bool ContainsBlacklistedWord(Uri url, List<string> blacklistedWords)
         {
             foreach (var word in blacklistedWords)
