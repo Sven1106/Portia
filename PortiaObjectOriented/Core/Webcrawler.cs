@@ -18,9 +18,10 @@ namespace PortiaObjectOriented
         private static XpathAttribute[] xpathAttributes;
         private static string dequeuedUrlsFile = "dequeuedUrls.txt";
         private static string allQueuedUrlsFile = "allQueuedUrls.txt";
-        public static async Task<List<object>> StartCrawlerAsync<T>(string rootUrl, List<string> blacklistedWords)
+        private static string allSuccesfullUrlsFile = "allSuccesfullUrls.txt";
+        public static async Task<List<object>> StartCrawlerAsync(string rootUrl, List<string> blacklistedWords, Type type)
         {
-            object rootObject = Activator.CreateInstance(typeof(T));
+            object rootObject = Activator.CreateInstance(type);
             Type rootObjectType = rootObject.GetType();
             if (rootObjectType.GetInterfaces().Contains(typeof(IWebcrawler)))
             {
@@ -33,6 +34,7 @@ namespace PortiaObjectOriented
                 #region Debugging
                 File.WriteAllText(dequeuedUrlsFile, String.Empty);
                 File.WriteAllText(allQueuedUrlsFile, String.Empty);
+                File.WriteAllText(allSuccesfullUrlsFile, String.Empty);
                 int crawledUrlsCount = 0;
                 #endregion
 
@@ -66,10 +68,11 @@ namespace PortiaObjectOriented
                         {
                             foreach (var element in elements)
                             {
-                                object item = CreateInstanceAndMapHtmlNode(typeof(T), element, currentUrl.ToString());
+                                object item = CreateInstanceAndMapHtmlNode(type, element, currentUrl.ToString());
                                 if (IsAnyValueAssigned(item))
                                 {
                                     items.Add(item);
+                                    File.AppendAllText(allSuccesfullUrlsFile, currentUrl.ToString() + Environment.NewLine);
                                 }
                             }
                         }
@@ -85,7 +88,7 @@ namespace PortiaObjectOriented
             }
             else
             {
-                Console.WriteLine("Root type " + typeof(T).Name + " has to derive from the interface " + typeof(IWebcrawler).Name);
+                Console.WriteLine("Root type " + type.Name + " has to derive from the interface " + typeof(IWebcrawler).Name);
                 return null;
             }
 
@@ -131,8 +134,8 @@ namespace PortiaObjectOriented
 
         private static object CreateInstanceAndMapHtmlNode(Type type, HtmlNode htmlNode, string url)
         {
-            object objectInstance = Activator.CreateInstance(type);
-            Type objectType = objectInstance.GetType();
+            object objectInstance = Activator.CreateInstance(type); // WHY?
+            Type objectType = objectInstance.GetType(); // WHY?
             foreach (PropertyInfo property in objectType.GetProperties())
             {
                 Type propertyType = property.PropertyType;

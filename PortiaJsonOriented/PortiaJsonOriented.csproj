@@ -58,19 +58,25 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Core\DTOS\PortiaResponse.cs" />
-    <Compile Include="Core\DTOS\RecipeDto.cs" />
+    <Compile Include="DTOS\Image.cs" />
+    <Compile Include="DTOS\PortiaResponse.cs" />
+    <Compile Include="DTOS\RecipeDto.cs" />
     <Compile Include="Core\Models\Data.cs" />
-    <Compile Include="Core\Models\Attributes.cs" />
+    <Compile Include="Core\Models\NodeAttribute.cs" />
     <Compile Include="Core\Models\JsonType.cs" />
-    <Compile Include="Core\Models\PortiaRequest.cs" />
+    <Compile Include="Core\Models\Request.cs" />
     <Compile Include="Core\Webcrawler.cs" />
+    <Compile Include="Core\XpathAttribute.cs" />
+    <Compile Include="PorsiaReflection.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
     <None Include="Core\RequestSchema.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Include="example1.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
     <None Include="Request.json">
@@ -99,6 +105,9 @@
     <PackageReference Include="Newtonsoft.Json.Schema">
       <Version>3.0.11</Version>
     </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="pseudoCode.json" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

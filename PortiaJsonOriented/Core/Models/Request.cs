@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 
 namespace PortiaJsonOriented.Core.Models
 {
-    public class PortiaRequest
+    public class Request
     {
-        public string ApiVersion { get; set; }
-        public Data Data { get; set; }
+        public string StartUrl { get; set; }
+        public List<Data> Data { get; set; }
     }
 }
