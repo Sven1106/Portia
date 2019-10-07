@@ -59,11 +59,20 @@ namespace PortiaJsonOriented
 
                 foreach (Data project in request.Data)
                 {
+
                     JObject projectObject = new JObject();
                     foreach (NodeAttribute item in project.Items)
                     {
                         JToken value = GetValueForJTokenRecursive(item, documentNode);
+                        if (value.ToString() == "")
+                        {
+                            continue;
+                        }
                         projectObject.Add(item.Name, value);
+                    }
+                    if (projectObject.HasValues == false)
+                    {
+                        continue;
                     }
                     projects[project.ProjectName].Add(projectObject);
                 }
@@ -73,39 +82,45 @@ namespace PortiaJsonOriented
         }
         private static JToken GetValueForJTokenRecursive(NodeAttribute node, HtmlNode htmlNode)
         {
-            JToken jToken;
+            JToken jToken = "";
+
             if (node.MultipleFromPage) // TODO
             {
                 JArray jArray = new JArray();
                 if (node.Type.ToLower() == "string" || node.Type.ToLower() == "number" || node.Type.ToLower() == "boolean") // basic types
                 {
                     HtmlNodeCollection elements = htmlNode.SelectNodes(node.Xpath);
-                    foreach (var element in elements)
+                    if (elements != null)
                     {
-                        HtmlNodeNavigator navigator = (HtmlNodeNavigator)element.CreateNavigator();
-                        jArray.Add(navigator.Value);
+                        foreach (var element in elements)
+                        {
+                            HtmlNodeNavigator navigator = (HtmlNodeNavigator)element.CreateNavigator();
+                            jArray.Add(navigator.Value);
+                        }
+                        jToken = jArray;
                     }
-                    jToken = jArray;
                 }
                 else if (node.Type.ToLower() == "object" && node.Attributes.Count > 0) // complex types
                 {
-                    HtmlNodeCollection elements = htmlNode.SelectNodes(node.Xpath);
                     JObject jObject = new JObject();
-                    foreach (var element in elements)
+                    HtmlNodeCollection elements = htmlNode.SelectNodes(node.Xpath);
+                    if (elements != null)
                     {
-
-                        foreach (var attribute in node.Attributes)
+                        foreach (var element in elements)
                         {
-                            JToken value = GetValueForJTokenRecursive(attribute, element);
-                            jObject.Add(attribute.Name, value);
+                            foreach (var attribute in node.Attributes)
+                            {
+                                JToken value = GetValueForJTokenRecursive(attribute, element);
+                                if (value.ToString() == "" && attribute.IsRequired)
+                                {
+                                    return jToken;
+                                }
+                                jObject.Add(attribute.Name, value);
+                            }
+                            jArray.Add(jObject);
                         }
-                        jArray.Add(jObject);
+                        jToken = jArray;
                     }
-                    jToken = jArray;
-                }
-                else
-                { // TODO add prober error handling. return list of errors that occurred.
-                    jToken = "ERROR OCCURED";
                 }
             }
             else
@@ -115,25 +130,30 @@ namespace PortiaJsonOriented
                 {
                     XPathNavigator nodeFound = navigator.SelectSingleNode(node.Xpath);
                     // Get as Type
-                    jToken = nodeFound.Value;
+                    if (nodeFound != null)
+                    {
+                        jToken = nodeFound.Value;
+                    }
                 }
                 else if (node.Type.ToLower() == "object" && node.Attributes.Count > 0) // complex types
                 {
-                    JObject jObject = new JObject();
                     HtmlNode element = htmlNode.SelectSingleNode(node.Xpath);
-                    foreach (var attribute in node.Attributes)
+                    if (element != null)
                     {
-                        JToken value = GetValueForJTokenRecursive(attribute, element);
-                        jObject.Add(attribute.Name, value);
+                        JObject jObject = new JObject();
+                        foreach (var attribute in node.Attributes)
+                        {
+                            JToken value = GetValueForJTokenRecursive(attribute, element);
+                            if (value.ToString() == "" && attribute.IsRequired)
+                            {
+                                return jToken;
+                            }
+                            jObject.Add(attribute.Name, value);
+                        }
+                        jToken = jObject;
                     }
-                    jToken = jObject;
-                }
-                else
-                { // TODO add prober error handling. return list of errors that occurred.
-                    jToken = "ERROR OCCURED";
                 }
             }
-
             return jToken;
         }
         private static void AddNewUrlsToQueue(List<string> blacklistedWords, Uri rootUri, ref Queue queue, List<Uri> visitedUrls, HtmlDocument htmlDoc)

@@ -43,7 +43,7 @@ namespace PortiaJsonOriented
         // create mapping template.
         static void Start()
         {
-            var example1 = File.ReadAllText("example1.json");
+            var example1 = File.ReadAllText("request.json");
             string response = Webcrawler.StartCrawlerAsync(example1).Result;
         }
 
