@@ -2,6 +2,8 @@
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
+using Newtonsoft.Json.Serialization;
+using PortiaJsonOriented.Core;
 using PortiaJsonOriented.Core.Models;
 using System;
 using System.Collections;
@@ -57,7 +59,6 @@ namespace PortiaJsonOriented
                 HtmlDocument htmlDoc = new HtmlDocument();
                 htmlDoc.LoadHtml(html);
                 HtmlNode documentNode = htmlDoc.DocumentNode;
-
                 foreach (Data project in request.Data)
                 {
 
@@ -70,6 +71,11 @@ namespace PortiaJsonOriented
                             continue;
                         }
                         projectObject.Add(item.Name, value);
+                        Metadata metadata = new Metadata(currentUrl.ToString(), DateTime.UtcNow);
+                        projectObject.Add("metadata", JObject.FromObject(metadata, new JsonSerializer()
+                        {
+                            ContractResolver = new CamelCasePropertyNamesContractResolver()
+                        }));
                     }
                     if (projectObject.HasValues == false)
                     {
@@ -79,6 +85,7 @@ namespace PortiaJsonOriented
                 }
                 AddNewUrlsToQueue(new List<string>(), rootUri, ref queue, visitedUrls, htmlDoc);
             }
+
             return "";
         }
         private static JToken GetValueForJTokenRecursive(NodeAttribute node, HtmlNode htmlNode)
