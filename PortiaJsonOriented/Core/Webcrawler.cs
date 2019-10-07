@@ -11,6 +11,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Xml.XPath;
 
@@ -84,7 +85,7 @@ namespace PortiaJsonOriented
         {
             JToken jToken = "";
 
-            if (node.MultipleFromPage) // TODO
+            if (node.GetMultipleFromPage) // TODO
             {
                 JArray jArray = new JArray();
                 if (node.Type.ToLower() == "string" || node.Type.ToLower() == "number" || node.Type.ToLower() == "boolean") // basic types
@@ -95,7 +96,7 @@ namespace PortiaJsonOriented
                         foreach (var element in elements)
                         {
                             HtmlNodeNavigator navigator = (HtmlNodeNavigator)element.CreateNavigator();
-                            jArray.Add(navigator.Value);
+                            jArray.Add(navigator.Value.Trim());
                         }
                         jToken = jArray;
                     }
@@ -132,7 +133,7 @@ namespace PortiaJsonOriented
                     // Get as Type
                     if (nodeFound != null)
                     {
-                        jToken = nodeFound.Value;
+                        jToken = nodeFound.Value.Trim();
                     }
                 }
                 else if (node.Type.ToLower() == "object" && node.Attributes.Count > 0) // complex types

@@ -97,7 +97,7 @@ namespace PortiaJsonOriented
             { // TODO add prober error handling. return list of errors that occurred.
                 return new ClassDefinition(); // returns empty value if provided type wasn't valid.
             }
-            if (node.MultipleFromPage)
+            if (node.GetMultipleFromPage)
             {
                 var listType = typeof(List<>);
                 type = listType.MakeGenericType(type);
