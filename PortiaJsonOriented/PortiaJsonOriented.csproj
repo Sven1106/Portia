@@ -58,6 +58,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Core\Models\Metadata.cs" />
     <Compile Include="DTOS\Image.cs" />
     <Compile Include="DTOS\PortiaResponse.cs" />
     <Compile Include="DTOS\RecipeDto.cs" />
