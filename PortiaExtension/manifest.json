@@ -1,0 +1,23 @@
+{
+  "name": "Portia 🕷️",
+  "version": "1.0",
+  "manifest_version": 2,
+  "description": "This extension helps creating the request json for the Portia API.",
+  "icons": {
+    "128": "icon.png"
+  },
+  "browser_action": {
+    "default_icon": "icon.png"
+  },
+  "background": {
+    "scripts": [
+      "background.js"
+    ],
+    "persistent": false
+  },
+  "permissions": [
+    "activeTab",
+    "declarativeContent",
+    "storage"
+  ]
+}

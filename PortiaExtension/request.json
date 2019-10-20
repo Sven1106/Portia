@@ -1,0 +1,53 @@
+{
+  "apiVersion": "1.0",
+  "startUrl": "https://www.arla.dk/opskrifter",
+  "projectName": "Arla",
+  "data": [
+    {
+      "name": "recipe",
+      "type": "object",
+      "getMultipleFromPage": false,
+      "isRequired": true,
+      "xpath": ".//*[@id=\"main-content\"]",
+      "attributes": [
+        {
+          "name": "heading",
+          "type": "string",
+          "getMultipleFromPage": false,
+          "isRequired": true,
+          "xpath": "./div/section[1]/section/header/div[1]/h1[1]"
+        },
+        {
+          "name": "ingredient",
+          "type": "string",
+          "getMultipleFromPage": true,
+          "isRequired": true,
+          "xpath": "./div/section[1]/section/div[2]/div/div[1]/div[2]/div/div/ul/li"
+        },
+        {
+          "name": "image",
+          "type": "object",
+          "getMultipleFromPage": false,
+          "isRequired": true,
+          "xpath": "./div/section[1]/section/div[1]/div/div/div[1]/div/img",
+          "attributes": [
+            {
+              "name": "src",
+              "type": "string",
+              "getMultipleFromPage": false,
+              "isRequired": true,
+              "xpath": "./@src"
+            },
+            {
+              "name": "alt",
+              "type": "string",
+              "getMultipleFromPage": false,
+              "isRequired": false,
+              "xpath": "./@alt"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
