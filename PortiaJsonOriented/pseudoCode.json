@@ -33,7 +33,7 @@ example	1.
 	
 	public string productTitle { get; set; } 	data[0].items[0].xpath
 
-	"data" : [
+	"data" : 
 		{
 			"productTitlePerPage" : [
 				{	
@@ -42,7 +42,7 @@ example	1.
 				}
 			]
 		}
-	]
+	
 
 
 	For every page do

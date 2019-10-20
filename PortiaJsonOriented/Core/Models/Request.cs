@@ -9,6 +9,7 @@ namespace PortiaJsonOriented.Core.Models
     public class Request
     {
         public string StartUrl { get; set; }
+        public string ProjectName { get; set; }
         public List<Data> Data { get; set; }
     }
 }

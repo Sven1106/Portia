@@ -29,7 +29,7 @@ namespace PortiaJsonOriented
                         classDefinitions.Add(classDefinition);
                     }
                 }
-                MyClassBuilder myClassBuilder = new MyClassBuilder(dataEntry.ProjectName);
+                MyClassBuilder myClassBuilder = new MyClassBuilder(dataEntry.TaskName);
                 var myclass = myClassBuilder.CreateObject(classDefinitions);
                 Type type = myclass.GetType();
                 WriteAllPropertyNames(type);

@@ -29,11 +29,11 @@ namespace PortiaJsonOriented
             List<Uri> visitedUrls = new List<Uri>();
             queue.Enqueue(rootUri);
             int crawledUrlsCount = 0;
-            // Add a new list for all projects in Data
-            Dictionary<string, JArray> projects = new Dictionary<string, JArray>();
+            // Add a new list for every task in Data
+            Dictionary<string, JArray> tasks = new Dictionary<string, JArray>();
             foreach (var item in request.Data)
             {
-                projects.Add(item.ProjectName, new JArray());
+                tasks.Add(item.TaskName, new JArray());
             }
 
             while (queue.Count > 0)
@@ -59,29 +59,29 @@ namespace PortiaJsonOriented
                 HtmlDocument htmlDoc = new HtmlDocument();
                 htmlDoc.LoadHtml(html);
                 HtmlNode documentNode = htmlDoc.DocumentNode;
-                foreach (Data project in request.Data)
+                foreach (Data task in request.Data)
                 {
 
-                    JObject projectObject = new JObject();
-                    foreach (NodeAttribute item in project.Items)
+                    JObject taskObject = new JObject();
+                    foreach (NodeAttribute item in task.Items)
                     {
                         JToken value = GetValueForJTokenRecursive(item, documentNode);
                         if (value.ToString() == "")
                         {
                             continue;
                         }
-                        projectObject.Add(item.Name, value);
+                        taskObject.Add(item.Name, value);
                         Metadata metadata = new Metadata(currentUrl.ToString(), DateTime.UtcNow);
-                        projectObject.Add("metadata", JObject.FromObject(metadata, new JsonSerializer()
+                        taskObject.Add("metadata", JObject.FromObject(metadata, new JsonSerializer()
                         {
                             ContractResolver = new CamelCasePropertyNamesContractResolver()
                         }));
                     }
-                    if (projectObject.HasValues == false)
+                    if (taskObject.HasValues == false)
                     {
                         continue;
                     }
-                    projects[project.ProjectName].Add(projectObject);
+                    tasks[task.TaskName].Add(taskObject);
                 }
                 AddNewUrlsToQueue(new List<string>(), rootUri, ref queue, visitedUrls, htmlDoc);
             }

@@ -4,46 +4,51 @@
   "projectName": "Arla",
   "data": [
     {
-      "name": "recipe",
-      "type": "object",
-      "getMultipleFromPage": false,
-      "isRequired": true,
-      "xpath": ".//*[@id=\"main-content\"]",
-      "attributes": [
+      "taskName": "AllRecipies",
+      "items": [
         {
-          "name": "heading",
-          "type": "string",
-          "getMultipleFromPage": false,
-          "isRequired": true,
-          "xpath": "./div/section[1]/section/header/div[1]/h1[1]"
-        },
-        {
-          "name": "ingredient",
-          "type": "string",
-          "getMultipleFromPage": true,
-          "isRequired": true,
-          "xpath": "./div/section[1]/section/div[2]/div/div[1]/div[2]/div/div/ul/li"
-        },
-        {
-          "name": "image",
+          "name": "recipe",
           "type": "object",
           "getMultipleFromPage": false,
           "isRequired": true,
-          "xpath": "./div/section[1]/section/div[1]/div/div/div[1]/div/img",
+          "xpath": ".//*[@id=\"main-content\"]",
           "attributes": [
             {
-              "name": "src",
+              "name": "heading",
               "type": "string",
               "getMultipleFromPage": false,
               "isRequired": true,
-              "xpath": "./@src"
+              "xpath": "./div/section[1]/section/header/div[1]/h1[1]"
             },
             {
-              "name": "alt",
+              "name": "ingredient",
               "type": "string",
+              "getMultipleFromPage": true,
+              "isRequired": true,
+              "xpath": "./div/section[1]/section/div[2]/div/div[1]/div[2]/div/div/ul/li"
+            },
+            {
+              "name": "image",
+              "type": "object",
               "getMultipleFromPage": false,
-              "isRequired": false,
-              "xpath": "./@alt"
+              "isRequired": true,
+              "xpath": "./div/section[1]/section/div[1]/div/div/div[1]/div/img",
+              "attributes": [
+                {
+                  "name": "src",
+                  "type": "string",
+                  "getMultipleFromPage": false,
+                  "isRequired": true,
+                  "xpath": "./@src"
+                },
+                {
+                  "name": "alt",
+                  "type": "string",
+                  "getMultipleFromPage": false,
+                  "isRequired": false,
+                  "xpath": "./@alt"
+                }
+              ]
             }
           ]
         }
@@ -51,3 +56,4 @@
     }
   ]
 }
+

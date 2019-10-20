@@ -1,9 +1,10 @@
 {
   "apiVersion": "1.0",
   "startUrl": "https://www.arla.dk/opskrifter",
+  "projectName": "Arla",
   "data": [
     {
-      "projectName": "Arla",
+      "taskName": "AllRecipies",
       "items": [
         {
           "name": "recipe",

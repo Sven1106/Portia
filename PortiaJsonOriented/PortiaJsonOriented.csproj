@@ -64,7 +64,6 @@
     <Compile Include="DTOS\RecipeDto.cs" />
     <Compile Include="Core\Models\Data.cs" />
     <Compile Include="Core\Models\NodeAttribute.cs" />
-    <Compile Include="Core\Models\JsonType.cs" />
     <Compile Include="Core\Models\Request.cs" />
     <Compile Include="Core\Webcrawler.cs" />
     <Compile Include="Core\XpathAttribute.cs" />
