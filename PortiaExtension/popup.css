@@ -1,0 +1,16 @@
+form {
+    padding: 2px;
+    border: 1px dashed #d3d3d3;
+    margin: 2px;
+}
+ul {
+    list-style-type: none;
+    margin: 0;
+}
+
+li {
+    list-style: none;
+    padding: 2px;
+    border: 1px dashed #d3d3d3;
+    margin: 2px;
+}
