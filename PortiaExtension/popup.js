@@ -1,21 +1,24 @@
 let form = document.getElementById("root");
 form.addEventListener("submit", function (e) {
     e.preventDefault();
-    //console.log(e);
 })
 
 function createTask(ulElementId) {
+    
     let ulElement = document.getElementById(ulElementId);
     let lastLiElement = ulElement.lastChild;
     let liElementId = createLiElementId(lastLiElement, ulElementId);
     let itemUlElementId = createElementId(liElementId, "items");
 
-    let taskNameInput = createInput("text", createElementId(liElementId, "taskName"))
+    let taskNameInput = createInput("text", createElementId(liElementId, "taskName"));
+    let deleteButton = createDeleteButton(liElementId);
 
-    let newLiElement = createLiElement(liElementId);
+    let newLiElement = createLiElementWithId(liElementId);
 
     let htmlElements = [];
     htmlElements.push(taskNameInput);
+    htmlElements.push(deleteButton);
+
     let brLabelButtonElements = createBrLabelButton(itemUlElementId, "items");
     htmlElements = htmlElements.concat(brLabelButtonElements);
 
@@ -23,7 +26,8 @@ function createTask(ulElementId) {
     ulElement.appendChild(newLiElement);
     console.log(document.getElementById("root"));
 }
-function createItem(ulElementId) {
+
+function createItemInUl(ulElementId) {
     let ulElement = document.getElementById(ulElementId);
     let lastLiElement = ulElement.lastChild;
     let liElementId = createLiElementId(lastLiElement, ulElementId);
@@ -32,41 +36,110 @@ function createItem(ulElementId) {
     let values = ["string", "number", "boolean", "object"]
 
     let nameInput = createInput("text", createElementId(liElementId, "name"))
-    let select = createSelect(values);
+    let deleteButton = createDeleteButton(liElementId);
+
+    let select = createSelect(values, createElementId(liElementId, "type"), function (e) {
+        let brLabelButtonElements;
+        if (this.value == "object") {
+            brLabelButtonElements = createBrLabelButton(itemUlElementId, "attributes");
+            newLiElement.appendChildren(brLabelButtonElements);
+        }
+        else if (this.value != "object" && brLabelButtonElements != null) {
+            newLiElement.removeChildren(brLabelButtonElements);
+            console.log(document.getElementById("root"));
+        }
+    });
     let getMultipleFromPageInput = createInput("checkbox", createElementId(liElementId, "getMultipleFromPage"))
     let isRequired = createInput("checkbox", createElementId(liElementId, "isRequired"))
     let xpathInput = createInput("text", createElementId(liElementId, "xpath"))
 
-
-    let newLiElement = createLiElement(liElementId);
-
     let htmlElements = [];
     htmlElements.push(nameInput);
+    htmlElements.push(deleteButton);
     htmlElements.push(select);
     htmlElements.push(getMultipleFromPageInput);
     htmlElements.push(isRequired);
     htmlElements.push(xpathInput);
 
-    // let brLabelButtonElements = createBrLabelButton(itemUlElementId, "attributes");
-    // htmlElements = htmlElements.concat(brLabelButtonElements);
-
+    let newLiElement = createLiElementWithId(liElementId);
     newLiElement.appendChildren(htmlElements);
     ulElement.appendChild(newLiElement);
     console.log(document.getElementById("root"));
+}
+function deleteElementById(id) {
+    let element = document.getElementById(id);
+    element.parentElement.removeChild(element)
 }
 
 function createBrLabelButton(itemUlElementId, name) {
     let htmlElements = [];
     let brElement = document.createElement("br");
     let itemsLabelElement = createLabel(name);
-    let itemsButtonElement = createButton(itemUlElementId);
-    let itemsUlElement = createUlElement(itemUlElementId);
+    let itemsButtonElement = createOnclickButton(createItemInUl, itemUlElementId, "+");
+    let itemsUlElement = createUlElementWithId(itemUlElementId);
     htmlElements.push(brElement);
     htmlElements.push(itemsLabelElement);
     htmlElements.push(itemsButtonElement);
     htmlElements.push(itemsUlElement);
     return htmlElements;
 
+}
+
+function createDeleteButton(liElementId) {
+    let deleteButton = createOnclickButton(deleteElementById, liElementId, "-");
+    deleteButton.setAttribute("class", "deleteButton");
+    return deleteButton;
+}
+
+//CORE FUNCTIONS
+function createOnclickButton(callback, id, value) {
+
+    let button = document.createElement("button");
+    button.addEventListener("click",function(){
+        callback(id)
+    })
+    button.appendChild(document.createTextNode(value));
+    return button;
+}
+
+function createSelect(values, id, callBack) {
+    let selectElement = document.createElement("select");
+    selectElement.setAttribute("id", id);
+    for (const value of values) {
+        let opt = document.createElement("option");
+        opt.text = value;
+        selectElement.add(opt);
+    }
+    selectElement.addEventListener("change", callBack);
+    return selectElement;
+}
+
+function createLabel(value) {
+    let label = document.createElement("label");
+    label.appendChild(document.createTextNode(value));
+    return label;
+}
+
+Node.prototype.appendChildren = function (htmlElements) {
+    htmlElements.forEach(element => {
+        this.appendChild(element);
+    });
+}
+
+Node.prototype.removeChildren = function (htmlElements) {
+    htmlElements.forEach(element => {
+        this.removeChild(element);
+    });
+}
+
+function createInput(type, id, value = "") {
+    let inputField = document.createElement("input");
+    inputField.setAttribute("id", id);
+    inputField.setAttribute("type", type);
+    if (value != "") {
+        inputField.setAttribute("value", value);
+    }
+    return inputField;
 }
 
 function createLiElementId(lastLiElement, ulElementId) {
@@ -83,53 +156,14 @@ function createElementId(parentElementId, value) {
     return elementId
 }
 
-function createUlElement(id) {
+function createUlElementWithId(id) {
     let ulElement = document.createElement("ul");
     ulElement.setAttribute("id", id);
     return ulElement;
 }
 
-function createLiElement(id) {
+function createLiElementWithId(id) {
     let newLiElement = document.createElement("li");
     newLiElement.setAttribute("id", id)
     return newLiElement;
-}
-
-Node.prototype.appendChildren = function (htmlElements) {
-    htmlElements.forEach(element => {
-        this.appendChild(element);
-    });
-}
-
-function createInput(type, id, value = "") {
-    let inputField = document.createElement("input");
-    inputField.setAttribute("id", id);
-    inputField.setAttribute("type", type);
-    if (value != "") {
-        inputField.setAttribute("value", value);
-    }
-    return inputField;
-}
-
-function createSelect(values) {
-    let selectElement = document.createElement("select");
-    for (const value of values) {
-        let opt = document.createElement("option");
-        opt.text = value;
-        selectElement.add(opt);
-    }
-    return selectElement;
-}
-
-
-function createLabel(value) {
-    let label = document.createElement("label");
-    label.appendChild(document.createTextNode(value));
-    return label;
-}
-function createButton(id) {
-    let button = document.createElement("button");
-    button.setAttribute("onclick", "createItem('" + id + "')");
-    button.appendChild(document.createTextNode("+"));
-    return button;
 }

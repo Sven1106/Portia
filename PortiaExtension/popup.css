@@ -1,16 +1,27 @@
 form {
+    width:800px;
     padding: 2px;
     border: 1px dashed #d3d3d3;
     margin: 2px;
 }
+
 ul {
     list-style-type: none;
     margin: 0;
+    padding: 0;
+    padding-left: 20px;
 }
 
 li {
     list-style: none;
-    padding: 2px;
-    border: 1px dashed #d3d3d3;
-    margin: 2px;
+    /* padding: 2px; */
+    /* border: 1px dashed #d3d3d3; */
+    /* margin: 2px; */
+    position: relative;
+}
+
+.deleteButton {
+    position: absolute;
+    top: 0;
+    right: 0;
 }
