@@ -2,116 +2,44 @@
 <html>
 
 <head>
+    <link href="https://fonts.googleapis.com/css?family=Roboto&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.8.0/css/bulma.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/bulmaswatch/lux/bulmaswatch.min.css">
     <link href="./popup.css" rel="stylesheet">
+    <script defer src="https://use.fontawesome.com/releases/v5.3.1/js/all.js"></script>
 </head>
 
-<body >
-    <form id="root" >
-        <label for="root.projectName">project name</label>
-        <br>
-        <input id="root.projectName" type="text">
-        <br>
-        <label for="root.startUrl">startUrl</label>
-        <br>
-        <input id="root.startUrl" type="text">
-        <br>
-        <label>tasks</label><button onclick="createTask('root.tasks', this)">+</button>
-        <ul id="root.tasks"></ul>
+<body>
+    <form id="root">
+        <div class="field">
+            <label for="root.projectName" class="label">Project</label>
+            <div class="control has-icons-left">
+                <input id="root.projectName" type="text" class="input is-small">
+                <span class="icon is-small is-left">
+                    <i class="fas fa-folder"></i>
+                </span>
+            </div>
+        </div>
+        <div class="field">
+            <label for="root.startUrl" class="label">Start Url</label>
+            <div class="control has-icons-left">
+                <input id="root.startUrl" type="text" class="input is-small">
+                <span class="icon is-small is-left">
+                    <i class="fas fa-globe"></i>
+                </span>
+            </div>
+        </div>
+        <div class="field">
+            <label class="label">Tasks</label>
+            <ul id="root.tasks"></ul>
+            <button class="button is-small is-fullwidth is-success" id="taskCreateButton">
+                <span class="icon">
+                    <i class="fas fa-plus-circle fa-lg"></i>
+                </span>
+            </button>
+        </div>
     </form>
-
-
-    <!-- <form id="root" method="post">
-        <label for="root.projectName">project name</label>
-        <br>
-        <input id="root.projectName" type="text">
-        <br>
-        <label for="root.startUrl">startUrl</label>
-        <br>
-        <input id="root.startUrl" type="text">
-        <br>
-        <label for="root.data">data</label>
-        <ul id="root.data">
-            <li id="root.data.0">
-                <label for="root.data.0.taskName">taskName</label>
-                <input id="root.data.0.taskName" type="text" value="AllRecipies">
-                <br>
-                <label for="root.data.0.items">items</label>
-                <ul id="root.data.0.items">
-                    <li id="root.data.0.items.0">
-                        <label for="root.data.0.items.0.name">name</label>
-                        <input id="root.data.0.items.0.name" type="text" value="recipe">
-                        <br>
-                        <label for="root.data.0.items.0.type">type</label>
-                        <select id="root.data.0.items.0.type">
-                            <option value="string">string</option>
-                            <option value="number">number</option>
-                            <option value="boolean">boolean</option>
-                            <option selected value="object">object</option>
-                        </select>
-                        <br>
-                        <label for="root.data.0.items.0.getMultipleFromPage">getMultipleFromPage</label>
-                        <input id="root.data.0.items.0.getMultipleFromPage" type="checkbox">
-                        <br>
-                        <label for="root.data.0.items.0.isRequired">isRequired</label>
-                        <input id="root.data.0.items.0.isRequired" type="checkbox" checked>
-                        <br>
-                        <label for="root.data.0.items.0.xpath">xpath</label>
-                        <input id="root.data.0.items.0.xpath" type="text" value>
-                        <br>
-                        <label for="root.data.0.items.0.attributes">attributes</label>
-                        <ul id="root.data.0.items.0.attributes">
-                            <li id="root.data.0.items.0.attributes.0">
-                                <label for="root.data.0.items.0.attributes.0.name">name
-                                </label>
-                                <input id="root.data.0.items.0.attributes.0.name" type="text" value="heading">
-                                <br>
-                                <label for="root.data.0.items.0.attributes.0.type">type</label>
-                                <select id="root.data.0.items.0.attributes.0.type">
-                                    <option selected value="string">string</option>
-                                    <option value="number">number</option>
-                                    <option value="boolean">boolean</option>
-                                    <option value="object">object</option>
-                                </select>
-                                <br>
-                                <label for="root.data.0.items.0.attributes.0.getMultipleFromPage">getMultipleFromPage</label>
-                                <input id="root.data.0.items.0.attributes.0.getMultipleFromPage" type="checkbox">
-                                <br>
-                                <label for="root.data.0.items.0.attributes.0.isRequired">isRequired</label>
-                                <input id="root.data.0.items.0.attributes.0.isRequired" type="checkbox" checked>
-                                <br>
-                                <label for="root.data.0.items.0.attributes.0.xpath">xpath</label>
-                                <input id="root.data.0.items.0.attributes.0.xpath" type="text">
-                                <br>
-                            </li>
-                            <li id="root.data.0.items.0.attributes.1">
-                                <label for="root.data.0.items.0.attributes.1.name">name</label>
-                                <input id="root.data.0.items.0.attributes.1.name" type="text" value="ingredient">
-                                <br>
-                                <label for="root.data.0.items.0.attributes.1.type">type</label>
-                                <select id="root.data.0.items.0.attributes.1.type">
-                                    <option selected value="string">string</option>
-                                    <option value="number">number</option>
-                                    <option value="boolean">boolean</option>
-                                    <option value="object">object</option>
-                                </select>
-                                <br>
-                                <label for="root.data.0.items.0.attributes.1.getMultipleFromPage">getMultipleFromPage</label>
-                                <input id="root.data.0.items.0.attributes.1.getMultipleFromPage" type="checkbox" checked>
-                                <br>
-                                <label for="root.data.0.items.0.attributes.1.isRequired">isRequired</label>
-                                <input id="root.data.0.items.0.attributes.1.isRequired" type="checkbox" checked>
-                                <br>
-                                <label for="root.data.0.items.0.attributes.1.xpath">xpath</label>
-                                <input id="root.data.0.items.0.attributes.1.xpath" type="text">
-                                <br>
-                            </li>
-                        </ul>
-                    </li>
-                </ul>
-            </li>
-        </ul>
-        <input type="submit" value="Submit">
-    </form> -->
+    <script defer src="https://code.getmdl.io/1.3.0/material.min.js"></script>
     <script src="./popup.js"></script>
 </body>
 
