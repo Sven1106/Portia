@@ -59,15 +59,11 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Core\Models\Metadata.cs" />
-    <Compile Include="DTOS\Image.cs" />
-    <Compile Include="DTOS\PortiaResponse.cs" />
-    <Compile Include="DTOS\RecipeDto.cs" />
-    <Compile Include="Core\Models\Data.cs" />
+    <Compile Include="Core\Models\DataForRequest.cs" />
     <Compile Include="Core\Models\NodeAttribute.cs" />
-    <Compile Include="Core\Models\Request.cs" />
+    <Compile Include="Core\Dtos\Request.cs" />
+    <Compile Include="Core\Dtos\Response.cs" />
     <Compile Include="Core\Webcrawler.cs" />
-    <Compile Include="Core\XpathAttribute.cs" />
-    <Compile Include="PorsiaReflection.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

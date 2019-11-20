@@ -3,7 +3,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
-using PortiaJsonOriented.Core;
+using PortiaJsonOriented.Core.Dtos;
 using PortiaJsonOriented.Core.Models;
 using System;
 using System.Collections;
@@ -21,7 +21,7 @@ namespace PortiaJsonOriented
 {
     public class Webcrawler
     {
-        public static async Task<string> StartCrawlerAsync(string json)
+        public static async Task<Response> StartCrawlerAsync(string json)
         {
             Request request = JsonConvert.DeserializeObject<Request>(json);
             Uri rootUri = new Uri(request.StartUrl);
@@ -29,6 +29,7 @@ namespace PortiaJsonOriented
             List<Uri> visitedUrls = new List<Uri>();
             queue.Enqueue(rootUri);
             int crawledUrlsCount = 0;
+            int itemSuccessfullyCrawledCount = 0;
             // Add a new list for every task in Data
             Dictionary<string, JArray> tasks = new Dictionary<string, JArray>();
             foreach (var item in request.Data)
@@ -36,7 +37,7 @@ namespace PortiaJsonOriented
                 tasks.Add(item.TaskName, new JArray());
             }
 
-            while (queue.Count > 0)
+            while (itemSuccessfullyCrawledCount < 1)
             {
                 Uri currentUrl = (Uri)queue.Dequeue();
                 visitedUrls.Add(currentUrl);
@@ -59,7 +60,7 @@ namespace PortiaJsonOriented
                 HtmlDocument htmlDoc = new HtmlDocument();
                 htmlDoc.LoadHtml(html);
                 HtmlNode documentNode = htmlDoc.DocumentNode;
-                foreach (Data task in request.Data)
+                foreach (DataForRequest task in request.Data)
                 {
 
                     JObject taskObject = new JObject();
@@ -76,17 +77,25 @@ namespace PortiaJsonOriented
                         {
                             ContractResolver = new CamelCasePropertyNamesContractResolver()
                         }));
+                        
                     }
                     if (taskObject.HasValues == false)
                     {
                         continue;
                     }
                     tasks[task.TaskName].Add(taskObject);
+                    itemSuccessfullyCrawledCount++;
                 }
                 AddNewUrlsToQueue(new List<string>(), rootUri, ref queue, visitedUrls, htmlDoc);
+                Console.Write("\rUrls in queue: {0} - Urls visited: {1} - Items successfully crawled: {2}", queue.Count, crawledUrlsCount, itemSuccessfullyCrawledCount);
             }
-
-            return "";
+            Response response = new Response
+            {
+                ProjectName = request.ProjectName,
+                StartUrl = request.StartUrl,
+                Data = tasks
+            };
+            return response;
         }
         private static JToken GetValueForJTokenRecursive(NodeAttribute node, HtmlNode htmlNode)
         {

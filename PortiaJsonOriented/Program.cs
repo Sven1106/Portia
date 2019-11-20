@@ -2,8 +2,9 @@
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Schema;
+using Newtonsoft.Json.Serialization;
 using PortiaJsonOriented.Core;
-using PortiaJsonOriented.Core.Models;
+using PortiaJsonOriented.Core.Dtos;
 using System;
 using System.Collections;
 using System.Collections.Concurrent;
@@ -24,9 +25,17 @@ namespace PortiaJsonOriented
         static async Task MainAsync()
         {
             var example1 = File.ReadAllText("request.json");
-            string response = await Webcrawler.StartCrawlerAsync(example1);
+            Response response = await Webcrawler.StartCrawlerAsync(example1);
+            var settings = new JsonSerializerSettings()
+            {
+                Formatting = Formatting.Indented,
+                ContractResolver = new DefaultContractResolver
+                {
+                    NamingStrategy = new CamelCaseNamingStrategy()
+                }
+            };
+            File.WriteAllText("response.json", JsonConvert.SerializeObject(response, settings));
         }
-
     }
 
 }
