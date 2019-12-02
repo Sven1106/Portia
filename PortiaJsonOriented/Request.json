@@ -1,7 +1,6 @@
 {
-  "apiVersion": "1.0",
-  "startUrl": "https://www.arla.dk/opskrifter/",
   "projectName": "Arla",
+  "startUrl": "https://www.arla.dk/opskrifter/",
   "data": [
     {
       "taskName": "allRecipes",
@@ -9,42 +8,42 @@
         {
           "name": "recipe",
           "type": "object",
-          "multipleFromPage": false,
+          "getMultipleFromPage": false,
           "isRequired": true,
           "xpath": "/html/body/main",
           "attributes": [
             {
               "name": "heading",
               "type": "string",
-              "multipleFromPage": false,
+              "getMultipleFromPage": false,
               "isRequired": true,
               "xpath": "./div/section[1]/section/header/div[1]/h1[1]"
             },
             {
               "name": "ingredients",
               "type": "string",
-              "multipleFromPage": true,
+              "getMultipleFromPage": true,
               "isRequired": true,
               "xpath": "./div/section[1]/section/div[2]/div/div[1]/div[2]/div/div/ul/li"
             },
             {
               "name": "image",
               "type": "object",
-              "multipleFromPage": false,
-              "isRequired": true,
+              "getMultipleFromPage": false,
+              "isRequired": false,
               "xpath": "./div/section[1]/section/div[1]/div/div/div[1]/div/img",
               "attributes": [
                 {
                   "name": "src",
                   "type": "string",
-                  "multipleFromPage": false,
-                  "isRequired": true,
+                  "getMultipleFromPage": false,
+                  "isRequired": false,
                   "xpath": "./@src"
                 },
                 {
                   "name": "alt",
                   "type": "string",
-                  "multipleFromPage": false,
+                  "getMultipleFromPage": false,
                   "isRequired": false,
                   "xpath": "./@alt"
                 }

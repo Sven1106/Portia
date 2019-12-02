@@ -2,13 +2,17 @@
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
+using Newtonsoft.Json.Schema;
 using Newtonsoft.Json.Serialization;
 using PortiaJsonOriented.Core.Dtos;
 using PortiaJsonOriented.Core.Models;
+using PuppeteerSharp;
 using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Dynamic;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Reflection;
@@ -21,12 +25,13 @@ namespace PortiaJsonOriented
 {
     public class Webcrawler
     {
-        public static async Task<Response> StartCrawlerAsync(string json)
+        private static HttpClient httpClient = new HttpClient();
+        public static async Task<Core.Dtos.Response> StartCrawlerAsync(Core.Dtos.Request request)
         {
-            Request request = JsonConvert.DeserializeObject<Request>(json);
             Uri rootUri = new Uri(request.StartUrl);
-            Queue queue = new Queue();
-            List<Uri> visitedUrls = new List<Uri>();
+            ConcurrentQueue<Uri> queue = new ConcurrentQueue<Uri>();
+            IList<Uri> visitedUrls = new List<Uri>();
+            IList<string> blackListedWords = new List<string>() { };
             queue.Enqueue(rootUri);
             int crawledUrlsCount = 0;
             int itemSuccessfullyCrawledCount = 0;
@@ -37,26 +42,20 @@ namespace PortiaJsonOriented
                 tasks.Add(item.TaskName, new JArray());
             }
 
-            while (itemSuccessfullyCrawledCount < 1)
+            while (itemSuccessfullyCrawledCount < 1000 && queue.Count > 0)
             {
-                Uri currentUrl = (Uri)queue.Dequeue();
+                queue.TryDequeue(out Uri currentUrl);
                 visitedUrls.Add(currentUrl);
                 crawledUrlsCount++;
                 string html = "";
-                using (HttpClient httpClient = new HttpClient())
+
+                HttpResponseMessage httpResponse = await httpClient.GetAsync(currentUrl);
+                if (!httpResponse.IsSuccessStatusCode)
                 {
-                    HttpResponseMessage httpResponseMessage = await httpClient.GetAsync(currentUrl);
-                    if (!httpResponseMessage.IsSuccessStatusCode)
-                    {
-                        continue;
-                    }
-                    Task<string> contentAsString = httpResponseMessage.Content.ReadAsStringAsync();
-                    if (contentAsString.IsFaulted)
-                    {
-                        continue;
-                    }
-                    html = contentAsString.Result;
+                    continue;
                 }
+                var httpContent = httpResponse.Content;
+                html = await httpContent.ReadAsStringAsync();
                 HtmlDocument htmlDoc = new HtmlDocument();
                 htmlDoc.LoadHtml(html);
                 HtmlNode documentNode = htmlDoc.DocumentNode;
@@ -77,7 +76,7 @@ namespace PortiaJsonOriented
                         {
                             ContractResolver = new CamelCasePropertyNamesContractResolver()
                         }));
-                        
+
                     }
                     if (taskObject.HasValues == false)
                     {
@@ -86,10 +85,10 @@ namespace PortiaJsonOriented
                     tasks[task.TaskName].Add(taskObject);
                     itemSuccessfullyCrawledCount++;
                 }
-                AddNewUrlsToQueue(new List<string>(), rootUri, ref queue, visitedUrls, htmlDoc);
+                AddNewUrlsToQueue(blackListedWords, rootUri, ref queue, visitedUrls, htmlDoc);
                 Console.Write("\rUrls in queue: {0} - Urls visited: {1} - Items successfully crawled: {2}", queue.Count, crawledUrlsCount, itemSuccessfullyCrawledCount);
             }
-            Response response = new Response
+            Core.Dtos.Response response = new Core.Dtos.Response
             {
                 ProjectName = request.ProjectName,
                 StartUrl = request.StartUrl,
@@ -100,7 +99,6 @@ namespace PortiaJsonOriented
         private static JToken GetValueForJTokenRecursive(NodeAttribute node, HtmlNode htmlNode)
         {
             JToken jToken = "";
-
             if (node.GetMultipleFromPage) // TODO
             {
                 JArray jArray = new JArray();
@@ -173,7 +171,7 @@ namespace PortiaJsonOriented
             }
             return jToken;
         }
-        private static void AddNewUrlsToQueue(List<string> blacklistedWords, Uri rootUri, ref Queue queue, List<Uri> visitedUrls, HtmlDocument htmlDoc)
+        private static void AddNewUrlsToQueue(IList<string> blacklistedWords, Uri rootUri, ref ConcurrentQueue<Uri> queue, IList<Uri> visitedUrls, HtmlDocument htmlDoc)
         {
             var aTags = htmlDoc.DocumentNode.SelectNodes("//a[@href]");
             if (aTags != null)
@@ -187,18 +185,19 @@ namespace PortiaJsonOriented
                     {
                         if (queue.Contains(url) == false && visitedUrls.Contains(url) == false)
                         {
-                            if (!ContainsBlacklistedWord(url, blacklistedWords)) //BLACKLIST CHECK
+                            if (ContainsAnyWords(url, blacklistedWords)) //BLACKLIST CHECK
                             {
-                                queue.Enqueue(url);
+                                continue;
                             }
+                            queue.Enqueue(url);
                         }
                     }
                 }
             }
         }
-        private static bool ContainsBlacklistedWord(Uri url, List<string> blacklistedWords)
+        private static bool ContainsAnyWords(Uri url, IList<string> words)
         {
-            foreach (var word in blacklistedWords)
+            foreach (var word in words)
             {
                 if (url.ToString().Contains(word))
                 {

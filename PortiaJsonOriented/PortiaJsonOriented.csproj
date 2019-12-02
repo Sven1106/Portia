@@ -69,13 +69,10 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
-    <None Include="Core\RequestSchema.json">
+    <None Include="requestSchema.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Include="example1.json">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-    <None Include="Request.json">
+    <None Include="request.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
   </ItemGroup>
@@ -101,9 +98,9 @@
     <PackageReference Include="Newtonsoft.Json.Schema">
       <Version>3.0.11</Version>
     </PackageReference>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="pseudoCode.json" />
+    <PackageReference Include="PuppeteerSharp">
+      <Version>2.0.0</Version>
+    </PackageReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

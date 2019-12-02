@@ -18,14 +18,27 @@ namespace PortiaJsonOriented
 {
     class Program
     {
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
-            MainAsync().Wait();
-        }
-        static async Task MainAsync()
-        {
-            var example1 = File.ReadAllText("request.json");
-            Response response = await Webcrawler.StartCrawlerAsync(example1);
+            var json = File.ReadAllText("request.json");
+
+            JSchemaValidatingReader jSchemaReader = new JSchemaValidatingReader(new JsonTextReader(new StringReader(json)));
+            jSchemaReader.Schema = JSchema.Parse(File.ReadAllText("requestSchema.json"));
+
+            IList<string> errorMessages = new List<string>();
+            jSchemaReader.ValidationEventHandler += (o, a) => errorMessages.Add(a.Message);
+            JsonSerializer serializer = new JsonSerializer();
+            Request request = serializer.Deserialize<Request>(jSchemaReader);
+            if(errorMessages.Count > 0)
+            {
+                foreach (var eventMessage in errorMessages)
+                {
+                    Console.WriteLine(eventMessage);
+                }
+                Console.ReadKey();
+                return;
+            }
+            Response response = await Webcrawler.StartCrawlerAsync(request);
             var settings = new JsonSerializerSettings()
             {
                 Formatting = Formatting.Indented,

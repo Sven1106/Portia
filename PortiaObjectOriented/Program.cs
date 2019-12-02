@@ -18,7 +18,7 @@ namespace PortiaObjectOriented
 
             Recipe recipe = new Recipe();
             Type type = recipe.GetType();
-            var result = Webcrawler.StartCrawlerAsync("https://www.arla.dk/opskrifter/risotto-med-bacon-og-able-rosenkalstopping-/", blacklistedWords, type).Result; //https://www.arla.dk/opskrifter/
+            var result = Webcrawler.StartCrawlerAsync("https://www.arla.dk/opskrifter/", blacklistedWords, type).Result; //https://www.arla.dk/opskrifter/
             var list = result.ToList();
             var responseJson = JsonConvert.SerializeObject(list, Formatting.Indented);
             System.IO.File.WriteAllText("response.json", responseJson);
