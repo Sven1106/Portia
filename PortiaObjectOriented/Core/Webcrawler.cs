@@ -14,6 +14,7 @@ namespace PortiaObjectOriented
 {
     public static class Webcrawler
     {
+        //TODO Change PortiaObjectOriented to match PortiaJSONOriented output json format
         private static ConcurrentDictionary<object, XpathAttribute[]> properties = new ConcurrentDictionary<object, XpathAttribute[]>();
         private static XpathAttribute[] xpathAttributes;
         private static string dequeuedUrlsFile = "dequeuedUrls.txt";
@@ -23,74 +24,74 @@ namespace PortiaObjectOriented
         {
             object rootObject = Activator.CreateInstance(type);
             Type rootObjectType = rootObject.GetType();
-            if (rootObjectType.GetInterfaces().Contains(typeof(IWebcrawler)))
+            //if (rootObjectType.GetInterfaces().Contains(typeof(IWebcrawler)))
+            //{
+            Uri rootUri = new Uri(rootUrl);
+            Queue queue = new Queue();
+            List<Uri> visitedUrls = new List<Uri>();
+            List<object> items = new List<object>();
+            queue.Enqueue(rootUri); // Add root page to queue
+
+            #region Debugging
+            File.WriteAllText(dequeuedUrlsFile, String.Empty);
+            File.WriteAllText(allQueuedUrlsFile, String.Empty);
+            File.WriteAllText(allSuccesfullUrlsFile, String.Empty);
+            int crawledUrlsCount = 0;
+            #endregion
+
+            while (visitedUrls.Count < 101)
             {
-                Uri rootUri = new Uri(rootUrl);
-                Queue queue = new Queue();
-                List<Uri> visitedUrls = new List<Uri>();
-                List<object> items = new List<object>();
-                queue.Enqueue(rootUri); // Add root page to queue
+                Uri currentUrl = (Uri)queue.Dequeue();
+                visitedUrls.Add(currentUrl);
+                File.AppendAllText(dequeuedUrlsFile, currentUrl.ToString() + Environment.NewLine);
+                crawledUrlsCount++;
 
-                #region Debugging
-                File.WriteAllText(dequeuedUrlsFile, String.Empty);
-                File.WriteAllText(allQueuedUrlsFile, String.Empty);
-                File.WriteAllText(allSuccesfullUrlsFile, String.Empty);
-                int crawledUrlsCount = 0;
-                #endregion
-
-                while (queue.Count > 0)
+                using (HttpClient httpClient = new HttpClient())
                 {
-                    Uri currentUrl = (Uri)queue.Dequeue();
-                    visitedUrls.Add(currentUrl);
-                    File.AppendAllText(dequeuedUrlsFile, currentUrl.ToString() + Environment.NewLine);
-                    crawledUrlsCount++;
-
-                    using (HttpClient httpClient = new HttpClient())
+                    HttpResponseMessage response = await httpClient.GetAsync(currentUrl);
+                    if (!response.IsSuccessStatusCode)
                     {
-                        HttpResponseMessage response = await httpClient.GetAsync(currentUrl);
-                        if (!response.IsSuccessStatusCode)
-                        {
-                            continue;
-                        }
-                        Task<string> contentAsString = response.Content.ReadAsStringAsync();
-                        if (contentAsString.IsFaulted)
-                        {
-                            continue;
-                        }
-                        string html = contentAsString.Result;
-                        HtmlDocument htmlDoc = new HtmlDocument();
-                        htmlDoc.LoadHtml(html);
+                        continue;
+                    }
+                    Task<string> contentAsString = response.Content.ReadAsStringAsync();
+                    if (contentAsString.IsFaulted)
+                    {
+                        continue;
+                    }
+                    string html = contentAsString.Result;
+                    HtmlDocument htmlDoc = new HtmlDocument();
+                    htmlDoc.LoadHtml(html);
 
-                        #region Elements to look for
-                        xpathAttributes = properties.GetOrAdd(rootObjectType, x => (XpathAttribute[])rootObjectType.GetCustomAttributes(typeof(XpathAttribute), false));
-                        HtmlNodeCollection elements = htmlDoc.DocumentNode.SelectNodes(xpathAttributes[0].NodeXpath);
-                        if (elements != null)
+                    #region Elements to look for
+                    xpathAttributes = properties.GetOrAdd(rootObjectType, x => (XpathAttribute[])rootObjectType.GetCustomAttributes(typeof(XpathAttribute), false));
+                    HtmlNodeCollection elements = htmlDoc.DocumentNode.SelectNodes(xpathAttributes[0].NodeXpath);
+                    if (elements != null)
+                    {
+                        foreach (var element in elements)
                         {
-                            foreach (var element in elements)
+                            object item = CreateInstanceAndMapHtmlNode(type, element, currentUrl.ToString());
+                            if (IsAnyValueAssigned(item))
                             {
-                                object item = CreateInstanceAndMapHtmlNode(type, element, currentUrl.ToString());
-                                if (IsAnyValueAssigned(item))
-                                {
-                                    items.Add(item);
-                                    File.AppendAllText(allSuccesfullUrlsFile, currentUrl.ToString() + Environment.NewLine);
-                                }
+                                items.Add(item);
+                                File.AppendAllText(allSuccesfullUrlsFile, currentUrl.ToString() + Environment.NewLine);
                             }
                         }
-                        #endregion
-
-                        #region Breadth-first traversing
-                        TraverseUrlsInHtmlDocument(blacklistedWords, rootUri, queue, visitedUrls, htmlDoc);
-                        #endregion
-                        Console.Write("\rUrls in queue: {0} - Urls visited: {1} - Items successfully crawled: {2}", queue.Count, crawledUrlsCount, items.Count);
                     }
+                    #endregion
+
+                    #region Breadth-first traversing
+                    TraverseUrlsInHtmlDocument(blacklistedWords, rootUri, queue, visitedUrls, htmlDoc);
+                    #endregion
+                    Console.Write("\rUrls in queue: {0} - Urls visited: {1} - Items successfully crawled: {2}", queue.Count, crawledUrlsCount, items.Count);
                 }
-                return items;
             }
-            else
-            {
-                Console.WriteLine("Root type " + type.Name + " has to derive from the interface " + typeof(IWebcrawler).Name);
-                return null;
-            }
+            return items;
+            //}
+            //else
+            //{
+            //    Console.WriteLine("Root type " + type.Name + " has to derive from the interface " + typeof(IWebcrawler).Name);
+            //    return null;
+            //}
 
         }
 
@@ -152,7 +153,7 @@ namespace PortiaObjectOriented
                     if (xpathAttributes[0].NodeXpath == string.Empty)
                     {
                         object value = navigator.ValueAs(property.PropertyType);
-                        if(property.PropertyType == typeof(string))
+                        if (property.PropertyType == typeof(string))
                         {
                             value = value.ToString().Trim();
                         }

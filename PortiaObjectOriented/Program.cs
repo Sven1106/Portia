@@ -11,10 +11,7 @@ namespace PortiaObjectOriented
     {
         static void Main(string[] args)
         {
-            List<string> blacklistedWords = new List<string>(new string[] {
-                "temaer",
-                "leksikon"
-            });
+            List<string> blacklistedWords = new List<string>(new string[] {});
 
             Recipe recipe = new Recipe();
             Type type = recipe.GetType();
