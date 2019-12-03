@@ -1,6 +1,6 @@
 {
   "projectName": "Arla",
-  "startUrl": "https://www.arla.dk/opskrifter/",
+  "startUrl": "https://www.arla.dk/opskrifter",
   "data": [
     {
       "taskName": "allRecipes",
@@ -10,28 +10,28 @@
           "type": "object",
           "getMultipleFromPage": false,
           "isRequired": true,
-          "xpath": "/html/body/main",
+          "xpath": "/html/body/div/div[1]",
           "attributes": [
             {
               "name": "heading",
               "type": "string",
               "getMultipleFromPage": false,
               "isRequired": true,
-              "xpath": "./div/section[1]/section/header/div[1]/h1[1]"
+              "xpath": "./div[1]/div[1]/h1"
             },
             {
               "name": "ingredients",
               "type": "string",
               "getMultipleFromPage": true,
-              "isRequired": true,
-              "xpath": "./div/section[1]/section/div[2]/div/div[1]/div[2]/div/div/ul/li"
+              "isRequired": false,
+              "xpath": "./div[2]/div[2]/div/div[2]/div/table/tbody/tr/th"
             },
             {
               "name": "image",
               "type": "object",
               "getMultipleFromPage": false,
               "isRequired": false,
-              "xpath": "./div/section[1]/section/div[1]/div/div/div[1]/div/img",
+              "xpath": "./div[1]/div[2]/picture/img",
               "attributes": [
                 {
                   "name": "src",

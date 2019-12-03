@@ -25,7 +25,20 @@ namespace PortiaJsonOriented
 {
     public class Webcrawler
     {
-        private static HttpClient httpClient = new HttpClient();
+        private static string dequeuedUrlsFile = "dequeuedUrls.txt";
+        private static string allQueuedUrlsFile = "allQueuedUrls.txt";
+        private static string allSuccesfullUrlsFile = "allSuccesfullUrls.txt";
+
+        public static async Task<string> Get(Browser browser, Uri uri)
+        {
+            using (var page = await browser.NewPageAsync())
+            {
+                await page.GoToAsync(uri.ToString());
+                //await page.WaitForSelectorAsync("div.main-content");
+                string content = await page.GetContentAsync();
+                return content;
+            }
+        }
         public static async Task<Core.Dtos.Response> StartCrawlerAsync(Core.Dtos.Request request)
         {
             Uri rootUri = new Uri(request.StartUrl);
@@ -33,8 +46,13 @@ namespace PortiaJsonOriented
             IList<Uri> visitedUrls = new List<Uri>();
             IList<string> blackListedWords = new List<string>() { };
             queue.Enqueue(rootUri);
-            int crawledUrlsCount = 0;
             int itemSuccessfullyCrawledCount = 0;
+            #region Debugging
+            File.WriteAllText(dequeuedUrlsFile, string.Empty);
+            File.WriteAllText(allQueuedUrlsFile, string.Empty);
+            File.WriteAllText(allSuccesfullUrlsFile, string.Empty);
+            int crawledUrlsCount = 0;
+            #endregion
             // Add a new list for every task in Data
             Dictionary<string, JArray> tasks = new Dictionary<string, JArray>();
             foreach (var item in request.Data)
@@ -42,20 +60,21 @@ namespace PortiaJsonOriented
                 tasks.Add(item.TaskName, new JArray());
             }
 
+            await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultRevision);
+            var browser = await Puppeteer.LaunchAsync(new LaunchOptions
+            {
+                Headless = true
+            });
+
             while (itemSuccessfullyCrawledCount < 1000 && queue.Count > 0)
             {
                 queue.TryDequeue(out Uri currentUrl);
+                File.AppendAllText(dequeuedUrlsFile, currentUrl.ToString() + Environment.NewLine);
                 visitedUrls.Add(currentUrl);
                 crawledUrlsCount++;
                 string html = "";
+                html = await Get(browser, currentUrl);
 
-                HttpResponseMessage httpResponse = await httpClient.GetAsync(currentUrl);
-                if (!httpResponse.IsSuccessStatusCode)
-                {
-                    continue;
-                }
-                var httpContent = httpResponse.Content;
-                html = await httpContent.ReadAsStringAsync();
                 HtmlDocument htmlDoc = new HtmlDocument();
                 htmlDoc.LoadHtml(html);
                 HtmlNode documentNode = htmlDoc.DocumentNode;
@@ -83,7 +102,9 @@ namespace PortiaJsonOriented
                         continue;
                     }
                     tasks[task.TaskName].Add(taskObject);
+                    File.AppendAllText(allSuccesfullUrlsFile, currentUrl.ToString() + Environment.NewLine);
                     itemSuccessfullyCrawledCount++;
+
                 }
                 AddNewUrlsToQueue(blackListedWords, rootUri, ref queue, visitedUrls, htmlDoc);
                 Console.Write("\rUrls in queue: {0} - Urls visited: {1} - Items successfully crawled: {2}", queue.Count, crawledUrlsCount, itemSuccessfullyCrawledCount);
@@ -190,6 +211,7 @@ namespace PortiaJsonOriented
                                 continue;
                             }
                             queue.Enqueue(url);
+                            File.AppendAllText(allQueuedUrlsFile, url.ToString() + Environment.NewLine);
                         }
                     }
                 }

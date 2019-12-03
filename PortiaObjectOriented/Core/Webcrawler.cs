@@ -39,7 +39,7 @@ namespace PortiaObjectOriented
             int crawledUrlsCount = 0;
             #endregion
 
-            while (visitedUrls.Count < 101)
+            while (queue.Count > 0)
             {
                 Uri currentUrl = (Uri)queue.Dequeue();
                 visitedUrls.Add(currentUrl);
