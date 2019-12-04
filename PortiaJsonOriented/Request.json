@@ -10,7 +10,7 @@
           "type": "object",
           "getMultipleFromPage": false,
           "isRequired": true,
-          "xpath": "/html/body/div/div[1]",
+          "xpath": "//div[@class='c-recipe']",
           "attributes": [
             {
               "name": "heading",

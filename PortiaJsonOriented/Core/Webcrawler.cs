@@ -1,23 +1,15 @@
 ﻿using HtmlAgilityPack;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
-using Newtonsoft.Json.Schema;
 using Newtonsoft.Json.Serialization;
-using PortiaJsonOriented.Core.Dtos;
 using PortiaJsonOriented.Core.Models;
 using PuppeteerSharp;
 using System;
-using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Dynamic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
-using System.Reflection;
-using System.Reflection.Emit;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Xml.XPath;
 
@@ -28,31 +20,29 @@ namespace PortiaJsonOriented
         private static string dequeuedUrlsFile = "dequeuedUrls.txt";
         private static string allQueuedUrlsFile = "allQueuedUrls.txt";
         private static string allSuccesfullUrlsFile = "allSuccesfullUrls.txt";
+        private static readonly HttpClient httpClient = new HttpClient();
 
-        public static async Task<string> Get(Browser browser, Uri uri)
+        public Webcrawler()
         {
-            using (var page = await browser.NewPageAsync())
-            {
-                await page.GoToAsync(uri.ToString());
-                //await page.WaitForSelectorAsync("div.main-content");
-                string content = await page.GetContentAsync();
-                return content;
-            }
+            #region Debugging
+            File.WriteAllText(dequeuedUrlsFile, string.Empty);
+            File.WriteAllText(allQueuedUrlsFile, string.Empty);
+            File.WriteAllText(allSuccesfullUrlsFile, string.Empty);
+
+
+            #endregion
         }
-        public static async Task<Core.Dtos.Response> StartCrawlerAsync(Core.Dtos.Request request)
+        public async Task<Core.Dtos.Response> StartCrawlerAsync(Core.Dtos.Request request)
         {
+            await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultRevision);
             Uri rootUri = new Uri(request.StartUrl);
             ConcurrentQueue<Uri> queue = new ConcurrentQueue<Uri>();
             IList<Uri> visitedUrls = new List<Uri>();
             IList<string> blackListedWords = new List<string>() { };
             queue.Enqueue(rootUri);
             int itemSuccessfullyCrawledCount = 0;
-            #region Debugging
-            File.WriteAllText(dequeuedUrlsFile, string.Empty);
-            File.WriteAllText(allQueuedUrlsFile, string.Empty);
-            File.WriteAllText(allSuccesfullUrlsFile, string.Empty);
+
             int crawledUrlsCount = 0;
-            #endregion
             // Add a new list for every task in Data
             Dictionary<string, JArray> tasks = new Dictionary<string, JArray>();
             foreach (var item in request.Data)
@@ -60,11 +50,9 @@ namespace PortiaJsonOriented
                 tasks.Add(item.TaskName, new JArray());
             }
 
-            await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultRevision);
-            var browser = await Puppeteer.LaunchAsync(new LaunchOptions
-            {
-                Headless = true
-            });
+            //Enabled headless option
+            var launchOptions = new LaunchOptions { Headless = fa };
+            var browser = await Puppeteer.LaunchAsync(launchOptions);
 
             while (itemSuccessfullyCrawledCount < 1000 && queue.Count > 0)
             {
@@ -72,41 +60,47 @@ namespace PortiaJsonOriented
                 File.AppendAllText(dequeuedUrlsFile, currentUrl.ToString() + Environment.NewLine);
                 visitedUrls.Add(currentUrl);
                 crawledUrlsCount++;
-                string html = "";
-                html = await Get(browser, currentUrl);
 
+                string html = await GetWithHttpClient(currentUrl);
                 HtmlDocument htmlDoc = new HtmlDocument();
                 htmlDoc.LoadHtml(html);
-                HtmlNode documentNode = htmlDoc.DocumentNode;
-                foreach (DataForRequest task in request.Data)
-                {
+                AddNewUrlsToQueue(blackListedWords, rootUri, ref queue, visitedUrls, htmlDoc);
 
-                    JObject taskObject = new JObject();
-                    foreach (NodeAttribute item in task.Items)
+                bool containsAnyStartElements = ContainsAnyRootItems(html, request);
+
+                if (containsAnyStartElements)
+                {
+                    html = await GetWithPuppeteer(browser, currentUrl);
+                    htmlDoc.LoadHtml(html);
+                    HtmlNode documentNode = htmlDoc.DocumentNode;
+                    foreach (DataForRequest task in request.Data)
                     {
-                        JToken value = GetValueForJTokenRecursive(item, documentNode);
-                        if (value.ToString() == "")
+
+                        JObject taskObject = new JObject();
+                        foreach (NodeAttribute item in task.Items)
+                        {
+                            JToken value = GetValueForJTokenRecursive(item, documentNode);
+                            if (value.ToString() == "")
+                            {
+                                continue;
+                            }
+                            taskObject.Add(item.Name, value);
+                            Metadata metadata = new Metadata(currentUrl.ToString(), DateTime.UtcNow);
+                            taskObject.Add("metadata", JObject.FromObject(metadata, new JsonSerializer()
+                            {
+                                ContractResolver = new CamelCasePropertyNamesContractResolver()
+                            }));
+
+                        }
+                        if (taskObject.HasValues == false)
                         {
                             continue;
                         }
-                        taskObject.Add(item.Name, value);
-                        Metadata metadata = new Metadata(currentUrl.ToString(), DateTime.UtcNow);
-                        taskObject.Add("metadata", JObject.FromObject(metadata, new JsonSerializer()
-                        {
-                            ContractResolver = new CamelCasePropertyNamesContractResolver()
-                        }));
-
+                        tasks[task.TaskName].Add(taskObject);
+                        File.AppendAllText(allSuccesfullUrlsFile, currentUrl.ToString() + Environment.NewLine);
+                        itemSuccessfullyCrawledCount++;
                     }
-                    if (taskObject.HasValues == false)
-                    {
-                        continue;
-                    }
-                    tasks[task.TaskName].Add(taskObject);
-                    File.AppendAllText(allSuccesfullUrlsFile, currentUrl.ToString() + Environment.NewLine);
-                    itemSuccessfullyCrawledCount++;
-
                 }
-                AddNewUrlsToQueue(blackListedWords, rootUri, ref queue, visitedUrls, htmlDoc);
                 Console.Write("\rUrls in queue: {0} - Urls visited: {1} - Items successfully crawled: {2}", queue.Count, crawledUrlsCount, itemSuccessfullyCrawledCount);
             }
             Core.Dtos.Response response = new Core.Dtos.Response
@@ -227,6 +221,43 @@ namespace PortiaJsonOriented
                 }
             }
             return false;
+        }
+        private static bool ContainsAnyRootItems(string html, Core.Dtos.Request request)
+        {
+            HtmlDocument htmlDoc = new HtmlDocument();
+            htmlDoc.LoadHtml(html);
+            HtmlNode documentNode = htmlDoc.DocumentNode;
+            foreach (var datum in request.Data)
+            {
+                foreach (var item in datum.Items)
+                {
+                    if (documentNode.SelectSingleNode(item.Xpath) != null)
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        private static async Task<string> GetWithHttpClient(Uri uri)
+        {
+            using (HttpResponseMessage response = await httpClient.GetAsync(uri))
+            {
+                string content = await response.Content.ReadAsStringAsync();
+                return content;
+            }
+        }
+
+        private static async Task<string> GetWithPuppeteer(Browser browser, Uri uri)
+        {
+            string content = "";
+            using (var page = await browser.NewPageAsync())
+            {
+                await page.GoToAsync(uri.ToString());
+                content = await page.GetContentAsync();
+            }
+            return content;
         }
     }
 }
