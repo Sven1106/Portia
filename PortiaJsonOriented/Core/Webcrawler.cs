@@ -51,7 +51,7 @@ namespace PortiaJsonOriented
             }
 
             //Enabled headless option
-            var launchOptions = new LaunchOptions { Headless = fa };
+            var launchOptions = new LaunchOptions { Headless = false };
             var browser = await Puppeteer.LaunchAsync(launchOptions);
 
             while (itemSuccessfullyCrawledCount < 1000 && queue.Count > 0)
