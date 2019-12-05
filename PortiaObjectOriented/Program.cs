@@ -30,9 +30,7 @@ namespace PortiaObjectOriented
 
     class Program
     {
-        private static BlockingCollection<Uri> inputQueue = new BlockingCollection<Uri>();
-        private static BlockingCollection<Uri> outputQueue = new BlockingCollection<Uri>();
-
+        private static BlockingCollection<Uri> UriQueue = new BlockingCollection<Uri>();
         static async Task Main(string[] args)
         {
             await new Program().Run();
@@ -41,50 +39,59 @@ namespace PortiaObjectOriented
         public async Task Run()
         {
             await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultRevision);
-            var launchOptions = new LaunchOptions { Headless = true };
-            var browser = await Puppeteer.LaunchAsync(launchOptions);
 
-            for (int i = 0; i < 1; i++)
+            var launchOptions = new LaunchOptions { Headless = false };
+
+            using (var browser = await Puppeteer.LaunchAsync(launchOptions))
             {
-                Uri uri = new Uri("https://www.arla.dk/");
-                Console.WriteLine("Queueing uri: {0}", uri);
-                inputQueue.Add(uri);
+
+                UriQueue.Add(new Uri("https://www.arla.dk/"));
+                //UriQueue.Add(new Uri("https://stackoverflow.com/"));
+                //UriQueue.Add(new Uri("https://www.youtube.com/"));
+                //UriQueue.Add(new Uri("https://devblogs.microsoft.com/"));
+
+                int threadCount = 2; //Environment.ProcessorCount;
+                IList<Task> taskList = new List<Task>();
+                for (int i = 0; i < threadCount; i++)
+                {
+                    int workerId = i;
+                    Task task = Task.Run(async () =>
+                    {
+                        await Worker(workerId, browser);
+                    });
+                    taskList.Add(task);
+                }
+                await Task.WhenAll(taskList);
             }
 
-            int threadCount = 4;
-            IList<Task> taskList = new List<Task>();
-            for (int i = 0; i < threadCount; ++i)
-            {
-                int workerId = i;
-                Task task = Task.Run(async () => await worker(workerId, browser));
-                taskList.Add(task);
-            }
-            inputQueue.CompleteAdding();
-            await Task.WhenAll(taskList);
             Console.WriteLine("Press any key to exit.");
             Console.ReadKey();
         }
-        public static async Task worker(int workerId, Browser browser)
+        public static async Task Worker(int workerId, Browser browser)
         {
             await Task.Run(async () =>
                 {
-                   Console.WriteLine("Worker {0} is starting.", workerId);
-                    foreach (var workItem in inputQueue.GetConsumingEnumerable())
+
+                    Console.WriteLine("Worker {0} is starting.", workerId);
+                    foreach (var workItem in UriQueue.GetConsumingEnumerable())
                     {
-                        Uri uri = workItem;
                         Console.WriteLine("Worker {0} is processing uri: {1}", workerId, workItem);
                         string content = "";
                         using (var page = await browser.NewPageAsync())
                         {
-
-                            await page.GoToAsync(uri.ToString());
+                            await page.GoToAsync(workItem.ToString());
                             content = await page.GetContentAsync();
+
+
+                            if (UriQueue.Count <= 0)
+                            {
+                                UriQueue.CompleteAdding(); // Add this to the HtmlWorker
+                            }
                         }
                     }
-                   Console.WriteLine("Worker {0} is stopping.", workerId);
+                    Console.WriteLine("Worker {0} is stopping.", workerId);
                 });
 
         }
-
     }
 }
