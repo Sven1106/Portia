@@ -9,6 +9,7 @@ using System.Threading;
 using System.Collections.Concurrent;
 using System.Net.Http;
 using PuppeteerSharp;
+using System.Threading.Tasks.Dataflow;
 
 namespace PortiaObjectOriented
 {
@@ -31,67 +32,75 @@ namespace PortiaObjectOriented
     class Program
     {
         private static BlockingCollection<Uri> UriQueue = new BlockingCollection<Uri>();
+        private static readonly BufferBlock<Uri> _queue = new BufferBlock<Uri>();
+
+        private BufferBlock<double> consumerQueue = new BufferBlock<double>();
+        private BufferBlock<double> producerQueue = new BufferBlock<double>();
         static async Task Main(string[] args)
         {
             await new Program().Run();
 
         }
-        public async Task Run()
+        async Task Run()
         {
-            await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultRevision);
-
-            var launchOptions = new LaunchOptions { Headless = false };
-
-            using (var browser = await Puppeteer.LaunchAsync(launchOptions))
+            var cts = new CancellationTokenSource();
+            CancellationToken token = cts.Token;
+            string myMessage = "Hello World";
+            Task.Factory.StartNew((state) =>
             {
+                Thread.Sleep(2000);
+                token.ThrowIfCancellationRequested();
+                Console.WriteLine("Is Background thread: {0}", Thread.CurrentThread.IsBackground);
+                Console.WriteLine("Is threadpool thread: {0}", Thread.CurrentThread.IsThreadPoolThread);
+                Console.WriteLine(myMessage);
 
-                UriQueue.Add(new Uri("https://www.arla.dk/"));
-                //UriQueue.Add(new Uri("https://stackoverflow.com/"));
-                //UriQueue.Add(new Uri("https://www.youtube.com/"));
-                //UriQueue.Add(new Uri("https://devblogs.microsoft.com/"));
-
-                int threadCount = 2; //Environment.ProcessorCount;
-                IList<Task> taskList = new List<Task>();
-                for (int i = 0; i < threadCount; i++)
-                {
-                    int workerId = i;
-                    Task task = Task.Run(async () =>
-                    {
-                        await Worker(workerId, browser);
-                    });
-                    taskList.Add(task);
-                }
-                await Task.WhenAll(taskList);
-            }
-
+            }, token).Wait();
             Console.WriteLine("Press any key to exit.");
+            
             Console.ReadKey();
+        }
+        public void DoStuff()
+        {
+            Thread.Sleep(5000);
+
         }
         public static async Task Worker(int workerId, Browser browser)
         {
             await Task.Run(async () =>
                 {
-
                     Console.WriteLine("Worker {0} is starting.", workerId);
-                    foreach (var workItem in UriQueue.GetConsumingEnumerable())
+                    while (await _queue.OutputAvailableAsync())
                     {
-                        Console.WriteLine("Worker {0} is processing uri: {1}", workerId, workItem);
+                        var item = await _queue.ReceiveAsync();
+                        Console.WriteLine("Worker {0} is processing uri: {1}", workerId, item);
                         string content = "";
                         using (var page = await browser.NewPageAsync())
                         {
-                            await page.GoToAsync(workItem.ToString());
+                            await page.GoToAsync(item.ToString());
                             content = await page.GetContentAsync();
-
-
-                            if (UriQueue.Count <= 0)
-                            {
-                                UriQueue.CompleteAdding(); // Add this to the HtmlWorker
-                            }
                         }
+
                     }
+
+                    //foreach (var workItem in UriQueue.GetConsumingEnumerable())
+                    //{
+                    //    Console.WriteLine("Worker {0} is processing uri: {1}", workerId, workItem);
+                    //    string content = "";
+                    //    using (var page = await browser.NewPageAsync())
+                    //    {
+                    //        await page.GoToAsync(workItem.ToString());
+                    //        content = await page.GetContentAsync();
+                    //        await Task.Delay(1000);// DO STUFF
+                    //    }
+                    //    if (UriQueue.Count <= 0)
+                    //    {
+                    //        UriQueue.CompleteAdding(); // Add this to the HtmlWorker
+                    //    }
+                    //}
                     Console.WriteLine("Worker {0} is stopping.", workerId);
                 });
 
         }
     }
+
 }

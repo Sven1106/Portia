@@ -11,6 +11,7 @@ namespace PortiaJsonOriented.Core.Dtos
     {
         public string ProjectName { get; set; }
         public string StartUrl { get; set; }
+        public IList<string> DisallowedStrings { get; set; }
         public List<DataForRequest> Data { get; set; }
     }
 }

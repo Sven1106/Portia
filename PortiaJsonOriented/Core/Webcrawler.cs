@@ -22,17 +22,15 @@ namespace PortiaJsonOriented
         private static string dequeuedUrlsFile = "dequeuedUrls.txt";
         private static string allQueuedUrlsFile = "allQueuedUrls.txt";
         private static string allSuccesfullUrlsFile = "allSuccesfullUrls.txt";
-        private static readonly HttpClient httpClient = new HttpClient();
         private static BlockingCollection<Uri> queue = new BlockingCollection<Uri>();
         private static BlockingCollection<Uri> visitedUrls = new BlockingCollection<Uri>();
         private static ConcurrentDictionary<string, JArray> tasks = new ConcurrentDictionary<string, JArray>();
         private static ConcurrentDictionary<int, string> IdMessagePairs = new ConcurrentDictionary<int, string>();
-
-        private static IList<string> blackListedWords = new List<string>() { };
+        private static IList<string> disallowedStrings = new List<string>() { };
         private static Uri rootUri;
         private static int itemSuccessfullyCrawledCount = 0;
         private static int crawledUrlsCount = 0;
-        private static Core.Dtos.Request Request = new Core.Dtos.Request();
+        private static List<DataForRequest> dataForRequest = new List<DataForRequest>();
 
         public Webcrawler()
         {
@@ -46,11 +44,13 @@ namespace PortiaJsonOriented
         }
         public async Task<Core.Dtos.Response> StartCrawlerAsync(Core.Dtos.Request request)
         {
-            Request = request;
-            rootUri = new Uri(Request.StartUrl);
+            dataForRequest = request.Data;
+            disallowedStrings = request.DisallowedStrings;
+
+            rootUri = new Uri(request.StartUrl);
             queue.TryAdd(rootUri);
 
-            foreach (var item in Request.Data)
+            foreach (var item in dataForRequest)
             {
                 tasks.TryAdd(item.TaskName, new JArray());
             }
@@ -71,7 +71,7 @@ namespace PortiaJsonOriented
             stopwatch.Start();
             using (var browser = await Puppeteer.LaunchAsync(launchOptions))
             {
-                int threadCount = Environment.ProcessorCount;
+                int threadCount = 4;// Environment.ProcessorCount;// Use max 4 threads to crawl
                 IList<Task> taskList = new List<Task>();
                 for (int i = 0; i < threadCount; i++)
                 {
@@ -112,13 +112,10 @@ namespace PortiaJsonOriented
                     string html = await GetWithPuppeteer(browser, currentUrl);
                     HtmlDocument htmlDoc = new HtmlDocument();
                     htmlDoc.LoadHtml(html);
-                    AddNewUrlsToQueue(blackListedWords, rootUri, ref queue, visitedUrls, htmlDoc);
-
-                    htmlDoc.LoadHtml(html);
+                    AddNewUrlsToQueue(disallowedStrings, rootUri, ref queue, visitedUrls, htmlDoc);
                     HtmlNode documentNode = htmlDoc.DocumentNode;
-                    foreach (DataForRequest task in Request.Data)
+                    foreach (DataForRequest task in dataForRequest)
                     {
-
                         JObject taskObject = new JObject();
                         foreach (NodeAttribute item in task.Items)
                         {
@@ -155,6 +152,16 @@ namespace PortiaJsonOriented
 
         }
 
+        public static async Task WorkerMessage()
+        {
+            while (true)
+            {
+                foreach (var item in IdMessagePairs)
+                {
+                    Console.WriteLine(item.Value);
+                }
+            }
+        }
         private static JToken GetValueForJTokenRecursive(NodeAttribute node, HtmlNode htmlNode)
         {
             JToken jToken = "";
@@ -230,7 +237,7 @@ namespace PortiaJsonOriented
             }
             return jToken;
         }
-        private static void AddNewUrlsToQueue(IList<string> blacklistedWords, Uri rootUri, ref BlockingCollection<Uri> queue, BlockingCollection<Uri> visitedUrls, HtmlDocument htmlDoc)
+        private static void AddNewUrlsToQueue(IList<string> disallowedStrings, Uri rootUri, ref BlockingCollection<Uri> queue, BlockingCollection<Uri> visitedUrls, HtmlDocument htmlDoc)
         {
             var aTags = htmlDoc.DocumentNode.SelectNodes("//a[@href]");
             if (aTags != null)
@@ -244,7 +251,7 @@ namespace PortiaJsonOriented
                     {
                         if (queue.Contains(url) == false && visitedUrls.Contains(url) == false)
                         {
-                            if (ContainsAnyWords(url, blacklistedWords)) //BLACKLIST CHECK
+                            if (ContainsAnyWords(url, disallowedStrings))
                             {
                                 continue;
                             }
