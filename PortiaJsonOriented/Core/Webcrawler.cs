@@ -56,9 +56,9 @@ namespace PortiaJsonOriented
                 tasks.TryAdd(item.TaskName, new JArray());
             }
 
-            await Task.Run(async () => await InitCrawler(4));
+            await Task.Run(async () => await CrawlerManager(4));
 
-            await Task.Run(async () => await InitValueExtractor(2));
+            await Task.Run(async () => await ValueExtractorManager(2));
 
 
             Core.Dtos.Response response = new Core.Dtos.Response
@@ -69,7 +69,7 @@ namespace PortiaJsonOriented
             };
             return response;
         }
-        public static async Task InitValueExtractor(int threadCount)
+        public static async Task ValueExtractorManager(int threadCount)
         {
             IList<Task> Workers = new List<Task>();
             for (int i = 0; i < threadCount; i++)
@@ -91,7 +91,7 @@ namespace PortiaJsonOriented
                 ExtractAndMapValues(uriHtml.Key, uriHtml.Value);
             }
         }
-        public static async Task InitCrawler(int threadCount)
+        public static async Task CrawlerManager(int threadCount)
         {
             await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultRevision);
             //Enabled headless option

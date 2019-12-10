@@ -31,74 +31,22 @@ namespace PortiaObjectOriented
 
     class Program
     {
-        private static BlockingCollection<Uri> UriQueue = new BlockingCollection<Uri>();
-        private static readonly BufferBlock<Uri> _queue = new BufferBlock<Uri>();
-
-        private BufferBlock<double> consumerQueue = new BufferBlock<double>();
-        private BufferBlock<double> producerQueue = new BufferBlock<double>();
         static async Task Main(string[] args)
         {
-            await new Program().Run();
-
+            await Run();
         }
-        async Task Run()
+        static async Task Run()
         {
-            var cts = new CancellationTokenSource();
-            CancellationToken token = cts.Token;
-            string myMessage = "Hello World";
-            Task.Factory.StartNew((state) =>
-            {
-                Thread.Sleep(2000);
-                token.ThrowIfCancellationRequested();
-                Console.WriteLine("Is Background thread: {0}", Thread.CurrentThread.IsBackground);
-                Console.WriteLine("Is threadpool thread: {0}", Thread.CurrentThread.IsThreadPoolThread);
-                Console.WriteLine(myMessage);
-
-            }, token).Wait();
+            await Task.Run(() => DoStuffAsync());
             Console.WriteLine("Press any key to exit.");
-            
             Console.ReadKey();
         }
-        public void DoStuff()
+        static async Task DoStuffAsync()
         {
-            Thread.Sleep(5000);
-
-        }
-        public static async Task Worker(int workerId, Browser browser)
-        {
-            await Task.Run(async () =>
-                {
-                    Console.WriteLine("Worker {0} is starting.", workerId);
-                    while (await _queue.OutputAvailableAsync())
-                    {
-                        var item = await _queue.ReceiveAsync();
-                        Console.WriteLine("Worker {0} is processing uri: {1}", workerId, item);
-                        string content = "";
-                        using (var page = await browser.NewPageAsync())
-                        {
-                            await page.GoToAsync(item.ToString());
-                            content = await page.GetContentAsync();
-                        }
-
-                    }
-
-                    //foreach (var workItem in UriQueue.GetConsumingEnumerable())
-                    //{
-                    //    Console.WriteLine("Worker {0} is processing uri: {1}", workerId, workItem);
-                    //    string content = "";
-                    //    using (var page = await browser.NewPageAsync())
-                    //    {
-                    //        await page.GoToAsync(workItem.ToString());
-                    //        content = await page.GetContentAsync();
-                    //        await Task.Delay(1000);// DO STUFF
-                    //    }
-                    //    if (UriQueue.Count <= 0)
-                    //    {
-                    //        UriQueue.CompleteAdding(); // Add this to the HtmlWorker
-                    //    }
-                    //}
-                    Console.WriteLine("Worker {0} is stopping.", workerId);
-                });
+            int ms = 1000;
+            await Task.Delay(ms);
+            Thread.Sleep(ms);
+            Console.WriteLine("waited :" + ms + "ms");
 
         }
     }
