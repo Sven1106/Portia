@@ -56,9 +56,8 @@ namespace PortiaJsonOriented
                 tasks.TryAdd(item.TaskName, new JArray());
             }
 
-            await Task.Run(async () => await CrawlerManager(4));
-
-            await Task.Run(async () => await ValueExtractorManager(2));
+            await Task.Run(() => CrawlerManager(1));
+            await Task.Run(() => ValueExtractorManager(4));
 
 
             Core.Dtos.Response response = new Core.Dtos.Response

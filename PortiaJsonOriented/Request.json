@@ -1,6 +1,6 @@
 {
   "projectName": "Arla",
-  "startUrl": "https://www.arla.dk/opskrifter/aben-lasagne-med-aubergine-og-gronkalspesto/",
+  "startUrl": "https://www.arla.dk/opskrifter/",
   "disallowedStrings": [ "/sog/?query" ],
   "data": [
     {

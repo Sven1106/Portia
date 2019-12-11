@@ -37,18 +37,64 @@ namespace PortiaObjectOriented
         }
         static async Task Run()
         {
-            await Task.Run(() => DoStuffAsync());
+
+            var linkOption = new DataflowLinkOptions { PropagateCompletion = true };
+
+            var downloader = new TransformBlock<string, string>(async x =>
+            {
+                string html = await GetHtmlAsync(x);
+                return html;
+            }, new ExecutionDataflowBlockOptions
+            {
+                MaxMessagesPerTask = 3, //enforce fairness, after handling n messages the block's task will be re-schedule.
+                MaxDegreeOfParallelism = 8,// by default Tpl dataflow assign a single task per block
+                BoundedCapacity = 4 // the size of the block input buffer
+            });
+
+            var linkParser = new TransformManyBlock<string, string>(
+                (html) =>
+                {
+                    var urls = new List<string>();
+                    if (html != "https://www.arla.dk/opskrifter/risotto-med-bacon-og-able-rosenkalstopping-/")
+                    {
+                        urls.Add("https://www.arla.dk/opskrifter/risotto-med-bacon-og-able-rosenkalstopping-/");
+                    }
+                    return urls;
+                }, new ExecutionDataflowBlockOptions
+                {
+                    MaxMessagesPerTask = 2
+                });
+
+            BroadcastBlock<string> contentBroadcaster = new BroadcastBlock<string>(i =>
+            {
+                Console.WriteLine(i);
+                return i;
+            });
+            var linkBroadcaster = new BroadcastBlock<string>(u =>
+            {
+                Console.WriteLine(u);
+                return u;
+            });
+
+            downloader.LinkTo(contentBroadcaster, linkOption, html => html != null);
+            contentBroadcaster.LinkTo(linkParser, linkOption);
+            linkParser.LinkTo(linkBroadcaster, linkOption);
+            linkBroadcaster.LinkTo(downloader, linkOption);
+
+
+            await downloader.SendAsync("https://www.arla.dk/");
+            Thread.Sleep(10 * 1000);
+            downloader.Complete();
+
+            await Task.WhenAll(downloader.Completion, linkParser.Completion, contentBroadcaster.Completion);
             Console.WriteLine("Press any key to exit.");
             Console.ReadKey();
         }
-        static async Task DoStuffAsync()
+        static async Task<string> GetHtmlAsync(string uri)
         {
-            int ms = 1000;
-            await Task.Delay(ms);
-            Thread.Sleep(ms);
-            Console.WriteLine("waited :" + ms + "ms");
-
+            string html = uri;
+            await Task.Delay(400);
+            return html;
         }
     }
-
 }
