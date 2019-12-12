@@ -13,28 +13,40 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Threading.Tasks.Dataflow;
 using System.Xml.XPath;
 
 namespace PortiaJsonOriented
 {
+    class UrlHtmlPair
+    {
+        public Uri Url { get; set; }
+        public string Html { get; set; }
+        public UrlHtmlPair(Uri url, string html)
+        {
+            Url = url;
+            Html = html;
+        }
+
+    }
     public class Webcrawler
     {
+        CancellationTokenSource cts;
+        CancellationToken ct;
+
         private static string dequeuedUrlsFile = "dequeuedUrls.txt";
         private static string allQueuedUrlsFile = "allQueuedUrls.txt";
         private static string allSuccesfullUrlsFile = "allSuccesfullUrls.txt";
-        private static BlockingCollection<Uri> uriQueue = new BlockingCollection<Uri>();
-        private static BlockingCollection<Uri> visitedUrls = new BlockingCollection<Uri>();
-        private static ConcurrentDictionary<string, JArray> tasks = new ConcurrentDictionary<string, JArray>();
-        private static ConcurrentDictionary<int, string> IdMessagePairs = new ConcurrentDictionary<int, string>();
-        private static ConcurrentDictionary<Uri, string> UriHtmlPairs = new ConcurrentDictionary<Uri, string>();
-        private static IList<string> disallowedStrings = new List<string>() { };
-        private static Uri rootUri;
-        private static int itemSuccessfullyCrawledCount = 0;
-        private static int crawledUrlsCount = 0;
+        private static Uri rootUrl;
         private static List<DataForRequest> dataForRequest = new List<DataForRequest>();
+        private static IList<string> disallowedStrings = new List<string>() { };
+        private static ConcurrentDictionary<string, JArray> tasks = new ConcurrentDictionary<string, JArray>();
+        private static BlockingCollection<Uri> legalUrls = new BlockingCollection<Uri>();
 
         public Webcrawler()
         {
+            cts = new CancellationTokenSource();
+            ct = cts.Token;
             #region Debugging
             File.WriteAllText(dequeuedUrlsFile, string.Empty);
             File.WriteAllText(allQueuedUrlsFile, string.Empty);
@@ -43,21 +55,89 @@ namespace PortiaJsonOriented
 
             #endregion
         }
+
         public async Task<Core.Dtos.Response> StartCrawlerAsync(Core.Dtos.Request request)
         {
+            rootUrl = new Uri(request.StartUrl);
             dataForRequest = request.Data;
             disallowedStrings = request.DisallowedStrings;
+            await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultRevision);
+            var browser = await Puppeteer.LaunchAsync(new LaunchOptions
+            {
+                Headless = false,
+            });
+            var linkOptions = new DataflowLinkOptions { PropagateCompletion = true };
 
-            rootUri = new Uri(request.StartUrl);
-            uriQueue.TryAdd(rootUri);
+            var htmlDownloaderOptions = new ExecutionDataflowBlockOptions
+            {
+                MaxMessagesPerTask = 3, //enforce fairness, after handling n messages the block's task will be re-schedule.
+                MaxDegreeOfParallelism = 2,// by default Tpl dataflow assign a single task per block
+                BoundedCapacity = 8, // the size of the block input buffer
+                CancellationToken = ct
+            };
+            var parserOptions = new ExecutionDataflowBlockOptions
+            {
+                MaxMessagesPerTask = 3,
+                MaxDegreeOfParallelism = 8,
+                CancellationToken = ct
+            };
+
+            Predicate<Uri> urlFilter = url =>
+            {
+                if (IsLegalUrl(url) == false)
+                {
+                    return false;
+                }
+                legalUrls.TryAdd(url);
+                return true;
+            };
+
+            TransformBlock<Uri, UrlHtmlPair> htmlDownloader = new TransformBlock<Uri, UrlHtmlPair>(
+                async url => await GetUrlHtmlPairAsync(url, browser), htmlDownloaderOptions);
+            TransformManyBlock<UrlHtmlPair, Uri> urlParser = new TransformManyBlock<UrlHtmlPair, Uri>(
+                urlHtmlPair => ParseUrls(urlHtmlPair.Html), parserOptions);
+            ActionBlock<UrlHtmlPair> objParser = new ActionBlock<UrlHtmlPair>(
+                urlHtmlPair =>
+                {
+                    ObjParser(urlHtmlPair);
+                }, parserOptions);
+
+
+
+
+            BroadcastBlock<UrlHtmlPair> htmlContentBroadcaster = new BroadcastBlock<UrlHtmlPair>(urlHtml => urlHtml);
+            BroadcastBlock<Uri> legalUrlBroadcaster = new BroadcastBlock<Uri>(url =>
+            {
+                Console.WriteLine("legalUrlBroadcaster cloned: {0}", url);
+                return url;
+            });
+            BroadcastBlock<Uri> urlBroadcaster = new BroadcastBlock<Uri>(url =>
+            {
+                Console.WriteLine("urlBroadcaster cloned: {0}", url);
+                return url;
+            });
+            urlBroadcaster.LinkTo(legalUrlBroadcaster, linkOptions, urlFilter);
+            legalUrlBroadcaster.LinkTo(htmlDownloader, linkOptions);
+            htmlDownloader.LinkTo(htmlContentBroadcaster, linkOptions);
+            htmlContentBroadcaster.LinkTo(objParser, linkOptions);
+            htmlContentBroadcaster.LinkTo(urlParser, linkOptions);
+            urlParser.LinkTo(urlBroadcaster, linkOptions);
+
+
 
             foreach (var item in dataForRequest)
             {
                 tasks.TryAdd(item.TaskName, new JArray());
             }
 
-            await Task.Run(() => CrawlerManager(1));
-            await Task.Run(() => ValueExtractorManager(4));
+
+            Console.WriteLine("Starting");
+            await urlBroadcaster.SendAsync(rootUrl);
+            //await Task.Delay(5000);
+            await Task.WhenAll(legalUrlBroadcaster.Completion);
+            await browser.CloseAsync();
+            Console.WriteLine("Press any key to exit.");
+            Console.ReadKey();
 
 
             Core.Dtos.Response response = new Core.Dtos.Response
@@ -68,137 +148,43 @@ namespace PortiaJsonOriented
             };
             return response;
         }
-        public static async Task ValueExtractorManager(int threadCount)
-        {
-            IList<Task> Workers = new List<Task>();
-            for (int i = 0; i < threadCount; i++)
-            {
-                Task task = Task.Run(() =>
-                {
-                    ValueExtractorWorker();
-                });
-                Workers.Add(task);
-            }
-            await Task.WhenAll(Workers);
 
-        }
-
-        public static void ValueExtractorWorker()
+        static async Task<UrlHtmlPair> GetUrlHtmlPairAsync(Uri url, Browser browser)
         {
-            foreach (var uriHtml in UriHtmlPairs)
-            {
-                ExtractAndMapValues(uriHtml.Key, uriHtml.Value);
-            }
-        }
-        public static async Task CrawlerManager(int threadCount)
-        {
-            await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultRevision);
-            //Enabled headless option
-            var args = new string[] {
-                "--no-sandbox",
-                "--disable-plugins", "--disable-sync", "--disable-gpu", "--disable-speech-api",
-                "--disable-remote-fonts", "--disable-shared-workers", "--disable-webgl", "--no-experiments",
-                "--no-first-run", "--no-default-browser-check", "--no-wifi", "--no-pings", "--no-service-autorun",
-                "--disable-databases", "--disable-default-apps", "--disable-demo-mode", "--disable-notifications",
-                "--disable-permissions-api", "--disable-background-networking", "--disable-3d-apis",
-                "--disable-bundled-ppapi-flash"
-            };
-
-            var launchOptions = new LaunchOptions { Headless = false, Args = args, IgnoreHTTPSErrors = true };
-            using (var browser = await Puppeteer.LaunchAsync(launchOptions))
-            {
-                IList<Task> crawlWorkers = new List<Task>();
-                for (int i = 0; i < threadCount; i++)
-                {
-                    Task task = Task.Run(async () =>
-                    {
-                        await CrawlerWorker(browser);
-                    });
-                    crawlWorkers.Add(task);
-                }
-                await Task.WhenAll(crawlWorkers);
-            }
-        }
-        public static async Task CrawlerWorker(Browser browser)
-        {
-            Console.WriteLine("Worker {0} is starting.", Task.CurrentId);
-            foreach (var workItem in uriQueue.GetConsumingEnumerable())
-            {
-                Uri currentUrl = workItem;
-                //Console.WriteLine("Worker {0} is processing uri: {1}", workerId, currentUrl);
-                File.AppendAllText(dequeuedUrlsFile, currentUrl.ToString() + Environment.NewLine);
-                visitedUrls.TryAdd(currentUrl);
-                Interlocked.Increment(ref crawledUrlsCount);
-
-                string html = await GetHtmlAsync(browser, currentUrl);
-                HtmlDocument htmlDoc = new HtmlDocument();
-                htmlDoc.LoadHtml(html);
-                AddNewUrlsToQueue(disallowedStrings, rootUri, uriQueue, visitedUrls, htmlDoc);
-                UriHtmlPairs.TryAdd(currentUrl, html);
-                // Console.Write("\rUrls in queue: {0} - Urls visited: {1} - Items successfully crawled: {2}", queue.Count, crawledUrlsCount, itemSuccessfullyCrawledCount);
-                if (uriQueue.Count <= 0)
-                {
-                    uriQueue.CompleteAdding(); // Add this to the HtmlWorker
-                }
-            }
-            Console.WriteLine("\rWorker {0} is stopping.", Task.CurrentId);
-
-        }
-        private static async Task<string> GetHtmlAsync(Browser browser, Uri uri)
-        {
-            string content = "";
+            string html = "";
             using (var page = await browser.NewPageAsync())
             {
                 await page.SetRequestInterceptionAsync(true);
-
                 page.Request += Page_Request;
-                await page.GoToAsync(uri.ToString());
-                content = await page.GetContentAsync();
+                await page.GoToAsync(url.ToString());
+                html = await page.GetContentAsync();
             }
-            return content;
-        }
-        private static async void Page_Request(object sender, RequestEventArgs e)
-        {
-            try
-            {
-                switch (e.Request.ResourceType)
-                {
-
-                    case ResourceType.Media:
-                    case ResourceType.StyleSheet:
-                    case ResourceType.Image:
-                    case ResourceType.Unknown:
-                    case ResourceType.Font:
-                    case ResourceType.TextTrack:
-                    case ResourceType.Xhr:
-                    case ResourceType.Fetch:
-                    case ResourceType.EventSource:
-                    case ResourceType.WebSocket:
-                    case ResourceType.Manifest:
-                    case ResourceType.Ping:
-                    case ResourceType.Other:
-                        await e.Request.AbortAsync();
-                        break;
-                    case ResourceType.Document:
-                    case ResourceType.Script:
-                    default:
-                        await e.Request.ContinueAsync();
-                        break;
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error => {ex.Message}");
-                await e.Request.ContinueAsync();
-            }
+            return new UrlHtmlPair(url, html);
         }
 
-
-
-        private static void ExtractAndMapValues(Uri currentUrl, string html)
+        static List<Uri> ParseUrls(string html)
         {
             HtmlDocument htmlDoc = new HtmlDocument();
             htmlDoc.LoadHtml(html);
+            var aTags = htmlDoc.DocumentNode.SelectNodes("//a[@href]");
+            List<Uri> newUrls = new List<Uri>();
+            if (aTags != null)
+            {
+                foreach (var aTag in aTags)
+                {
+                    string hrefValue = aTag.Attributes["href"].Value;
+                    Uri url = new Uri(hrefValue, UriKind.RelativeOrAbsolute);
+                    url = new Uri(rootUrl, url);
+                    newUrls.Add(url);
+                }
+            }
+            return newUrls;
+        }
+
+        static void ObjParser(UrlHtmlPair urlHtmlPair)
+        {
+            HtmlDocument htmlDoc = new HtmlDocument();
+            htmlDoc.LoadHtml(urlHtmlPair.Html);
             HtmlNode documentNode = htmlDoc.DocumentNode;
             foreach (DataForRequest task in dataForRequest)
             {
@@ -211,7 +197,7 @@ namespace PortiaJsonOriented
                         continue;
                     }
                     taskObject.Add(item.Name, value);
-                    Metadata metadata = new Metadata(currentUrl.ToString(), DateTime.UtcNow);
+                    Metadata metadata = new Metadata(urlHtmlPair.Url.ToString(), DateTime.UtcNow);
                     taskObject.Add("metadata", JObject.FromObject(metadata, new JsonSerializer()
                     {
                         ContractResolver = new CamelCasePropertyNamesContractResolver()
@@ -224,9 +210,10 @@ namespace PortiaJsonOriented
                 }
                 tasks[task.TaskName].Add(taskObject);
                 // File.AppendAllText(allSuccesfullUrlsFile, currentUrl.ToString() + Environment.NewLine);
-                Interlocked.Increment(ref itemSuccessfullyCrawledCount);
+                //Interlocked.Increment(ref itemSuccessfullyCrawledCount);
             }
         }
+
         private static JToken GetValueForJTokenRecursive(NodeAttribute node, HtmlNode htmlNode)
         {
             JToken jToken = "";
@@ -302,30 +289,16 @@ namespace PortiaJsonOriented
             }
             return jToken;
         }
-        private static void AddNewUrlsToQueue(IList<string> disallowedStrings, Uri rootUri, BlockingCollection<Uri> queue, BlockingCollection<Uri> visitedUrls, HtmlDocument htmlDoc)
+
+        private static bool IsLegalUrl(Uri url)
         {
-            var aTags = htmlDoc.DocumentNode.SelectNodes("//a[@href]");
-            if (aTags != null)
+            if (url.OriginalString.Contains(rootUrl.OriginalString) == false ||
+                legalUrls.Contains(url) == true ||
+                ContainsAnyWords(url, disallowedStrings) == true)
             {
-                foreach (var aTag in aTags)
-                {
-                    string hrefValue = aTag.Attributes["href"].Value;
-                    Uri url = new Uri(hrefValue, UriKind.RelativeOrAbsolute);
-                    url = new Uri(rootUri, url);
-                    if (url.OriginalString.Contains(rootUri.OriginalString) == true)
-                    {
-                        if (queue.Contains(url) == false && visitedUrls.Contains(url) == false)
-                        {
-                            if (ContainsAnyWords(url, disallowedStrings))
-                            {
-                                continue;
-                            }
-                            queue.TryAdd(url);
-                            File.AppendAllText(allQueuedUrlsFile, url.ToString() + Environment.NewLine);
-                        }
-                    }
-                }
+                return false;
             }
+            return true;
         }
         private static bool ContainsAnyWords(Uri url, IList<string> words)
         {
@@ -338,6 +311,42 @@ namespace PortiaJsonOriented
             }
             return false;
         }
+        private static async void Page_Request(object sender, RequestEventArgs e)
+        {
+            try
+            {
+                switch (e.Request.ResourceType)
+                {
+
+                    case ResourceType.Media:
+                    case ResourceType.StyleSheet:
+                    case ResourceType.Image:
+                    case ResourceType.Unknown:
+                    case ResourceType.Font:
+                    case ResourceType.TextTrack:
+                    case ResourceType.Xhr:
+                    case ResourceType.Fetch:
+                    case ResourceType.EventSource:
+                    case ResourceType.WebSocket:
+                    case ResourceType.Manifest:
+                    case ResourceType.Ping:
+                    case ResourceType.Other:
+                        await e.Request.AbortAsync();
+                        break;
+                    case ResourceType.Document:
+                    case ResourceType.Script:
+                    default:
+                        await e.Request.ContinueAsync();
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error => {ex.Message}");
+                await e.Request.ContinueAsync();
+            }
+        }
+
 
     }
 }

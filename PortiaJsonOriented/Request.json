@@ -1,6 +1,6 @@
 {
   "projectName": "Arla",
-  "startUrl": "https://www.arla.dk/opskrifter/",
+  "startUrl": "https://www.arla.dk/opskrifter/risotto-med-bacon-og-able-rosenkalstopping-/",
   "disallowedStrings": [ "/sog/?query" ],
   "data": [
     {
