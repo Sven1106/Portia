@@ -10,6 +10,7 @@ using System.Collections.Concurrent;
 using System.Net.Http;
 using PuppeteerSharp;
 using System.Threading.Tasks.Dataflow;
+using HtmlAgilityPack;
 
 namespace PortiaObjectOriented
 {
@@ -31,70 +32,110 @@ namespace PortiaObjectOriented
 
     class Program
     {
+        private static Uri rootUri;
+        private static BlockingCollection<Uri> visitedUrls = new BlockingCollection<Uri>();
         static async Task Main(string[] args)
         {
-            await Run();
+            await RunAsync();
         }
-        static async Task Run()
+        static async Task RunAsync()
         {
-
-            var linkOption = new DataflowLinkOptions { PropagateCompletion = true };
-
-            var downloader = new TransformBlock<string, string>(async x =>
+            rootUri = new Uri("https://www.arla.dk/");
+            await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultRevision);
+            var browser = await Puppeteer.LaunchAsync(new LaunchOptions
             {
-                string html = await GetHtmlAsync(x);
-                return html;
-            }, new ExecutionDataflowBlockOptions
+                Headless = false,
+            });
+
+
+            DataflowLinkOptions linkOption = new DataflowLinkOptions { PropagateCompletion = true };
+            var downloaderOptions = new ExecutionDataflowBlockOptions
             {
                 MaxMessagesPerTask = 3, //enforce fairness, after handling n messages the block's task will be re-schedule.
                 MaxDegreeOfParallelism = 8,// by default Tpl dataflow assign a single task per block
                 BoundedCapacity = 4 // the size of the block input buffer
-            });
+            };
 
-            var linkParser = new TransformManyBlock<string, string>(
-                (html) =>
-                {
-                    var urls = new List<string>();
-                    if (html != "https://www.arla.dk/opskrifter/risotto-med-bacon-og-able-rosenkalstopping-/")
-                    {
-                        urls.Add("https://www.arla.dk/opskrifter/risotto-med-bacon-og-able-rosenkalstopping-/");
-                    }
-                    return urls;
-                }, new ExecutionDataflowBlockOptions
-                {
-                    MaxMessagesPerTask = 2
-                });
+            var linkParserOptions = new ExecutionDataflowBlockOptions
+            {
+                MaxMessagesPerTask = 2
+            };
+            TransformBlock<Uri, string> htmlDownloader = new TransformBlock<Uri, string>(
+                async uri => await GetHtmlAsync(uri, browser), downloaderOptions);
 
-            BroadcastBlock<string> contentBroadcaster = new BroadcastBlock<string>(i =>
+            TransformManyBlock<string, Uri> urlParser = new TransformManyBlock<string, Uri>(
+                html => ParseUris(html), linkParserOptions);
+
+            BroadcastBlock<string> htmlBroadcaster = new BroadcastBlock<string>(i => i);
+            BroadcastBlock<Uri> urlBroadcaster = new BroadcastBlock<Uri>(u =>
             {
-                Console.WriteLine(i);
-                return i;
-            });
-            var linkBroadcaster = new BroadcastBlock<string>(u =>
-            {
-                Console.WriteLine(u);
+                Console.WriteLine("LinkBroadcaster cloned: {0}", u);
+                visitedUrls.Add(u);
                 return u;
             });
 
-            downloader.LinkTo(contentBroadcaster, linkOption, html => html != null);
-            contentBroadcaster.LinkTo(linkParser, linkOption);
-            linkParser.LinkTo(linkBroadcaster, linkOption);
-            linkBroadcaster.LinkTo(downloader, linkOption);
+            urlBroadcaster.LinkTo(htmlDownloader, linkOption);
+            //urlBroadcaster.LinkTo(visitedUrls, linkOption);
+            htmlDownloader.LinkTo(htmlBroadcaster, linkOption);
+            htmlBroadcaster.LinkTo(urlParser, linkOption);
+            urlParser.LinkTo(urlBroadcaster, linkOption);
 
-
-            await downloader.SendAsync("https://www.arla.dk/");
-            Thread.Sleep(10 * 1000);
-            downloader.Complete();
-
-            await Task.WhenAll(downloader.Completion, linkParser.Completion, contentBroadcaster.Completion);
+            Console.WriteLine("Starting");
+            await urlBroadcaster.SendAsync(rootUri);
+            await Task.Delay(2000);
+            await Task.WhenAll(htmlDownloader.Completion, urlParser.Completion);
             Console.WriteLine("Press any key to exit.");
             Console.ReadKey();
         }
-        static async Task<string> GetHtmlAsync(string uri)
+        static async Task<string> GetHtmlAsync(Uri uri, Browser browser)
         {
-            string html = uri;
-            await Task.Delay(400);
+            string html;
+            using (var page = await browser.NewPageAsync())
+            {
+                await page.GoToAsync(uri.ToString());
+                html = await page.GetContentAsync();
+            }
             return html;
+        }
+
+        static List<Uri> ParseUris(string html)
+        {
+            HtmlDocument htmlDoc = new HtmlDocument();
+            htmlDoc.LoadHtml(html);
+            var aTags = htmlDoc.DocumentNode.SelectNodes("//a[@href]");
+            List<Uri> newUris = new List<Uri>();
+            if (aTags != null)
+            {
+                foreach (var aTag in aTags)
+                {
+                    string hrefValue = aTag.Attributes["href"].Value;
+                    Uri url = new Uri(hrefValue, UriKind.RelativeOrAbsolute);
+                    url = new Uri(rootUri, url);
+                    if (url.OriginalString.Contains(rootUri.OriginalString) == true)
+                    {
+                        if (visitedUrls.Contains(url) == false)
+                        {
+                            newUris.Add(url);
+                        }
+                    }
+                }
+            }
+
+            // Tilføj Action som hele tiden håndterer visitedUrls bagved
+            newUris = newUris.Distinct().ToList();
+            return newUris;
+        }
+
+        private static bool ContainsAnyWords(Uri url, IList<string> words)
+        {
+            foreach (var word in words)
+            {
+                if (url.ToString().Contains(word))
+                {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 }
