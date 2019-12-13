@@ -10,6 +10,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Management;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -42,11 +43,25 @@ namespace PortiaJsonOriented
         private static IList<string> disallowedStrings = new List<string>() { };
         private static ConcurrentDictionary<string, JArray> tasks = new ConcurrentDictionary<string, JArray>();
         private static BlockingCollection<Uri> legalUrls = new BlockingCollection<Uri>();
+        private static int itemSuccessfullyCrawledCount = 0;
+        private static int crawledUrlsCount = 0;
 
+        private Browser browser;
+
+        private TransformBlock<Uri, UrlHtmlPair> htmlDownloader;
+        private TransformManyBlock<UrlHtmlPair, Uri> urlParser;
+        private ActionBlock<UrlHtmlPair> objParser;
+
+        private BroadcastBlock<UrlHtmlPair> htmlContentBroadcaster;
+        private BroadcastBlock<Uri> legalUrlBroadcaster;
+        private BroadcastBlock<Uri> urlBroadcaster;
+        private ITargetBlock<Uri> urlGarbage;
+        private ITargetBlock<UrlHtmlPair> urlHtmlPairGarbage;
+        private int timeOutSeconds = 10;
         public Webcrawler()
         {
             cts = new CancellationTokenSource();
-            ct = cts.Token;
+            ct = cts.Token; // TODO add to Blocks
             #region Debugging
             File.WriteAllText(dequeuedUrlsFile, string.Empty);
             File.WriteAllText(allQueuedUrlsFile, string.Empty);
@@ -55,33 +70,101 @@ namespace PortiaJsonOriented
 
             #endregion
         }
-
-        public async Task<Core.Dtos.Response> StartCrawlerAsync(Core.Dtos.Request request)
+        private string GetMainModuleFilepath(int processId)
         {
-            rootUrl = new Uri(request.StartUrl);
-            dataForRequest = request.Data;
-            disallowedStrings = request.DisallowedStrings;
-            await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultRevision);
-            var browser = await Puppeteer.LaunchAsync(new LaunchOptions
+            string wmiQueryString = "SELECT ProcessId, ExecutablePath FROM Win32_Process WHERE ProcessId = " + processId;
+            using (var searcher = new ManagementObjectSearcher(wmiQueryString))
             {
-                Headless = false,
-            });
-            var linkOptions = new DataflowLinkOptions { PropagateCompletion = true };
+                using (var results = searcher.Get())
+                {
+                    ManagementObject mo = results.Cast<ManagementObject>().FirstOrDefault();
+                    if (mo != null)
+                    {
+                        return (string)mo["ExecutablePath"];
+                    }
+                }
+            }
+            return null;
+        }
+        public async Task CreateBlocks()
+        {
+            if (Process.GetProcessesByName("chrome").Length > 0)
+            {
+                // Is running
+            }
+            var bla = Process.GetProcessesByName("Chrome");
+            var executablePath = new BrowserFetcher().GetExecutablePath(BrowserFetcher.DefaultRevision);
+            string s = GetMainModuleFilepath(35676);
+            await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultRevision);
+            var args = new string[] {
+                "--no-sandbox",
+                "--disable-plugins", "--disable-sync", "--disable-gpu", "--disable-speech-api",
+                "--disable-remote-fonts", "--disable-shared-workers", "--disable-webgl", "--no-experiments",
+                "--no-first-run", "--no-default-browser-check", "--no-wifi", "--no-pings", "--no-service-autorun",
+                "--disable-databases", "--disable-default-apps", "--disable-demo-mode", "--disable-notifications",
+                "--disable-permissions-api", "--disable-background-networking", "--disable-3d-apis",
+                "--disable-bundled-ppapi-flash"
+            };
+            var launchOptions = new LaunchOptions { Headless = true, Args = args, IgnoreHTTPSErrors = true };
+            browser = await Puppeteer.LaunchAsync(launchOptions);
+            
+
 
             var htmlDownloaderOptions = new ExecutionDataflowBlockOptions
             {
-                MaxMessagesPerTask = 3, //enforce fairness, after handling n messages the block's task will be re-schedule.
-                MaxDegreeOfParallelism = 2,// by default Tpl dataflow assign a single task per block
-                BoundedCapacity = 8, // the size of the block input buffer
-                CancellationToken = ct
+                BoundedCapacity = 30, // the size of the block input buffer
+                MaxDegreeOfParallelism = 3, // by default Tpl dataflow assign a single task per block
+                MaxMessagesPerTask = 1 //enforce fairness, after handling n messages the block's task will be re-schedule.
+
             };
             var parserOptions = new ExecutionDataflowBlockOptions
             {
-                MaxMessagesPerTask = 3,
-                MaxDegreeOfParallelism = 8,
-                CancellationToken = ct
+                BoundedCapacity = 30,
+                MaxDegreeOfParallelism = 10,    //Get the maximum number of messages that the block can process simultaneously.
+                MaxMessagesPerTask = 2          //Get the maximum number of messages that can be processed per task.
             };
 
+            htmlDownloader = new TransformBlock<Uri, UrlHtmlPair>(
+                async url =>
+                {
+                    // Console.WriteLine("\rhtmlDownloader Block {0}/{1}", htmlDownloader.InputCount, htmlDownloader.OutputCount);
+                    return await GetUrlHtmlPairAsync(url, browser);
+                }
+                , htmlDownloaderOptions);
+
+            urlParser = new TransformManyBlock<UrlHtmlPair, Uri>(
+                urlHtmlPair =>
+                {
+                    // Console.WriteLine("\rurlParser Block {0}/{1}", urlParser.InputCount, urlParser.OutputCount);
+                    return ParseUrls(urlHtmlPair.Html);
+                }, parserOptions);
+
+            objParser = new ActionBlock<UrlHtmlPair>(
+                 urlHtmlPair =>
+                 {
+                     ObjParser(urlHtmlPair);
+                 }, parserOptions);
+
+            urlGarbage = DataflowBlock.NullTarget<Uri>();
+            urlHtmlPairGarbage = DataflowBlock.NullTarget<UrlHtmlPair>();
+
+
+            htmlContentBroadcaster = new BroadcastBlock<UrlHtmlPair>(urlHtml => urlHtml);
+            legalUrlBroadcaster = new BroadcastBlock<Uri>(url =>
+            {
+                //Console.WriteLine("legalUrlBroadcaster cloned: {0}", url);
+                return url;
+            });
+            urlBroadcaster = new BroadcastBlock<Uri>(url =>
+            {
+                //Console.WriteLine("urlBroadcaster cloned: {0}", url);
+                return url;
+            });
+        }
+
+        public void ConfigureBlocks()
+        {
+            var linkOptions = new DataflowLinkOptions { PropagateCompletion = true };
             Predicate<Uri> urlFilter = url =>
             {
                 if (IsLegalUrl(url) == false)
@@ -92,49 +175,69 @@ namespace PortiaJsonOriented
                 return true;
             };
 
-            TransformBlock<Uri, UrlHtmlPair> htmlDownloader = new TransformBlock<Uri, UrlHtmlPair>(
-                async url => await GetUrlHtmlPairAsync(url, browser), htmlDownloaderOptions);
-            TransformManyBlock<UrlHtmlPair, Uri> urlParser = new TransformManyBlock<UrlHtmlPair, Uri>(
-                urlHtmlPair => ParseUrls(urlHtmlPair.Html), parserOptions);
-            ActionBlock<UrlHtmlPair> objParser = new ActionBlock<UrlHtmlPair>(
-                urlHtmlPair =>
-                {
-                    ObjParser(urlHtmlPair);
-                }, parserOptions);
 
-
-
-
-            BroadcastBlock<UrlHtmlPair> htmlContentBroadcaster = new BroadcastBlock<UrlHtmlPair>(urlHtml => urlHtml);
-            BroadcastBlock<Uri> legalUrlBroadcaster = new BroadcastBlock<Uri>(url =>
-            {
-                Console.WriteLine("legalUrlBroadcaster cloned: {0}", url);
-                return url;
-            });
-            BroadcastBlock<Uri> urlBroadcaster = new BroadcastBlock<Uri>(url =>
-            {
-                Console.WriteLine("urlBroadcaster cloned: {0}", url);
-                return url;
-            });
             urlBroadcaster.LinkTo(legalUrlBroadcaster, linkOptions, urlFilter);
             legalUrlBroadcaster.LinkTo(htmlDownloader, linkOptions);
             htmlDownloader.LinkTo(htmlContentBroadcaster, linkOptions);
+            htmlDownloader.LinkTo(urlHtmlPairGarbage, linkOptions);
             htmlContentBroadcaster.LinkTo(objParser, linkOptions);
             htmlContentBroadcaster.LinkTo(urlParser, linkOptions);
             urlParser.LinkTo(urlBroadcaster, linkOptions);
+            urlParser.LinkTo(urlGarbage, linkOptions);
 
+        }
+        public async Task Render()
+        {
+            while (!htmlDownloader.Completion.IsCompleted)
+            {
 
+                ConsoleColor color = ConsoleColor.Yellow;
+                WriteToConsole(color, $"urlBroadcaster:         is completed = {urlBroadcaster.Completion.IsCompleted}," +
+                             $"\nlegalUrlBroadcaster:    is completed = {legalUrlBroadcaster.Completion.IsCompleted}" +
+                             $"\nhtmlContentBroadcaster: is completed = {htmlContentBroadcaster.Completion.IsCompleted}" +
+                             $"\nhtmlDownloader:         is completed = {htmlDownloader.Completion.IsCompleted}, input={htmlDownloader.InputCount}, output={htmlDownloader.OutputCount}" +
+                             $"\nurlParser:              is completed = {urlParser.Completion.IsCompleted}, input={urlParser.InputCount}, output={urlParser.OutputCount}" +
+                             $"\nobjParser:              is completed = {objParser.Completion.IsCompleted}, input={objParser.InputCount}"
+                             );
+                await Task.Delay(16);
+                Console.Clear();
+
+            }
+        }
+        public async Task Monitor()
+        {
+            while (!htmlDownloader.Completion.IsCompleted)
+            {
+                await Task.Delay(timeOutSeconds * 1000); // arbitrary delay
+                if (urlParser.InputCount == 0 && urlParser.OutputCount == 0
+                && htmlDownloader.InputCount == 0 && htmlDownloader.OutputCount == 0
+                && objParser.InputCount == 0)
+                {
+                    htmlDownloader.Complete();
+                }
+
+            }
+        }
+        public async Task<Core.Dtos.Response> StartCrawlerAsync(Core.Dtos.Request request)
+        {
+            rootUrl = new Uri(request.StartUrl);
+            dataForRequest = request.Data;
+            disallowedStrings = request.DisallowedStrings;
 
             foreach (var item in dataForRequest)
             {
                 tasks.TryAdd(item.TaskName, new JArray());
             }
 
+            await CreateBlocks();
+            ConfigureBlocks();
+
 
             Console.WriteLine("Starting");
             await urlBroadcaster.SendAsync(rootUrl);
-            //await Task.Delay(5000);
-            await Task.WhenAll(legalUrlBroadcaster.Completion);
+            Task monitor = Monitor();
+            Task render = Render();
+            await Task.WhenAll(render, monitor, urlBroadcaster.Completion);
             await browser.CloseAsync();
             Console.WriteLine("Press any key to exit.");
             Console.ReadKey();
@@ -159,6 +262,8 @@ namespace PortiaJsonOriented
                 await page.GoToAsync(url.ToString());
                 html = await page.GetContentAsync();
             }
+            Interlocked.Increment(ref crawledUrlsCount);
+            // Console.Write("\rUrls in queue: {0} - Urls visited: {1} - Items successfully crawled: {2}", legalUrls.Count, crawledUrlsCount, itemSuccessfullyCrawledCount);
             return new UrlHtmlPair(url, html);
         }
 
@@ -209,8 +314,8 @@ namespace PortiaJsonOriented
                     continue;
                 }
                 tasks[task.TaskName].Add(taskObject);
-                // File.AppendAllText(allSuccesfullUrlsFile, currentUrl.ToString() + Environment.NewLine);
-                //Interlocked.Increment(ref itemSuccessfullyCrawledCount);
+                Interlocked.Increment(ref itemSuccessfullyCrawledCount);
+                // Console.Write("\rUrls in queue: {0} - Urls visited: {1} - Items successfully crawled: {2}", legalUrls.Count, crawledUrlsCount, itemSuccessfullyCrawledCount);
             }
         }
 
@@ -346,7 +451,12 @@ namespace PortiaJsonOriented
                 await e.Request.ContinueAsync();
             }
         }
-
+        private static void WriteToConsole(ConsoleColor color, string format)
+        {
+            Console.ForegroundColor = color;
+            Console.WriteLine(format);
+            Console.ResetColor();
+        }
 
     }
 }
