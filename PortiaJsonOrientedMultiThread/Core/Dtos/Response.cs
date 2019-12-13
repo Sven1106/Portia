@@ -3,14 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using PortiaJsonOriented.Core.Models;
 
-namespace PortiaJsonOriented.Core.Dtos
+namespace PortiaJsonOrientedMultiThread.Core.Dtos
 {
-    public class Request
+    public class Response
     {
         public string ProjectName { get; set; }
         public string StartUrl { get; set; }
-        public List<DataForRequest> Data { get; set; }
+        public dynamic Data { get; set; }
     }
 }

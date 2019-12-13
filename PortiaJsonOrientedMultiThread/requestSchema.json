@@ -5,6 +5,7 @@
   "required": [
     "projectName",
     "startUrl",
+    "disallowedStrings",
     "data"
   ],
   "properties": {
@@ -15,6 +16,13 @@
     "startUrl": {
       "type": "string",
       "pattern": "^(.*)$"
+    },
+    "disallowedStrings": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(.*)$"
+      }
     },
     "data": {
       "type": "array",
