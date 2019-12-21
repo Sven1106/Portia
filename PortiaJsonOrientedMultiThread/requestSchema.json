@@ -6,7 +6,7 @@
     "projectName",
     "startUrl",
     "disallowedStrings",
-    "data"
+    "tasks"
   ],
   "properties": {
     "projectName": {
@@ -24,7 +24,7 @@
         "pattern": "^(.*)$"
       }
     },
-    "data": {
+    "tasks": {
       "type": "array",
       "items": {
         "$ref": "#/definitions/task"

@@ -4,7 +4,7 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{58efe9da-e372-4a19-9e44-3fa32e648a46}</ProjectGuid>
+    <ProjectGuid>{58EFE9DA-E372-4A19-9E44-3FA32E648A46}</ProjectGuid>
     <OutputType>Exe</OutputType>
     <RootNamespace>PortiaJsonOriented</RootNamespace>
     <AssemblyName>PortiaJsonOriented</AssemblyName>

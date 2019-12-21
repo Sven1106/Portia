@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace PortiaJsonOrientedMultiThread.Core.Models
 {
-    public class DataForRequest
+    public class Task
     {
         public string TaskName { get; set; }
         public List<NodeAttribute> Items { get; set; }
