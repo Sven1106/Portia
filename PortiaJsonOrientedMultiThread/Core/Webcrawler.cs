@@ -126,6 +126,7 @@ namespace PortiaJsonOrientedMultiThread
                 var newUrls = ParseHtmlToUrls(urlHtmlPair.Html);
                 return newUrls;
             });
+
             siteMapParser = new TransformManyBlock<UrlHtmlPair, Uri>(urlHtmlPair =>
             {
                 var newUrls = ParseHtmlToUrls(urlHtmlPair.Html);
@@ -239,7 +240,17 @@ namespace PortiaJsonOrientedMultiThread
                 dataByTask.TryAdd(task.TaskName, new JArray());
             }
             await CreateBlocks();
-            bool isRootUrlASiteMap = rootUrl.OriginalString.Contains("sitemap");
+
+
+            #region Check if sitemap
+            UrlHtmlPair rootUrlHtml = await GetUrlHtmlPairAsync(rootUrl, browser);
+
+
+
+            #endregion
+
+
+            bool isRootUrlASiteMap = true;
             if (isRootUrlASiteMap)
             {
                 ConfigureBlocksForLinearFlow();
@@ -249,6 +260,7 @@ namespace PortiaJsonOrientedMultiThread
                 ConfigureBlocksForCircularFlow();
             }
 
+            #region unfinishedWork
             crashDump = new CrashDump("GUID");
             var allUnfinishedWork = await crashDump.AnyCrashDump();
             if (allUnfinishedWork.Count() != 0)
@@ -264,10 +276,8 @@ namespace PortiaJsonOrientedMultiThread
                 var unfinishedUrls = legalUrls.Except(visitedUrls).ToList();
                 unfinishedUrls.ForEach(async (uu) => await legalUrlBroadcaster.SendAsync(uu));
             }
-            else
-            {
-                await legalUrlBroadcaster.SendAsync(rootUrl);
-            }
+            #endregion
+            await legalUrlBroadcaster.SendAsync(rootUrl);
             Task render = Render();
             Task monitor = Monitor();
             await Task.WhenAll(monitor);
