@@ -6,8 +6,8 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProjectGuid>{B80B0D6F-0644-4A64-952B-E9B5877D8824}</ProjectGuid>
     <OutputType>Exe</OutputType>
-    <RootNamespace>PortiaJsonOrientedMultiThread</RootNamespace>
-    <AssemblyName>PortiaJsonOrientedMultiThread</AssemblyName>
+    <RootNamespace>PortiaJsonOrientedTPL</RootNamespace>
+    <AssemblyName>PortiaJsonOrientedTPL</AssemblyName>
     <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
@@ -72,12 +72,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
-    <None Include="requestSchema.json">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-    <None Include="request.json">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
   </ItemGroup>
   <ItemGroup>
     <BootstrapperPackage Include=".NETFramework,Version=v4.7.2">
@@ -109,6 +103,9 @@
     </PackageReference>
     <PackageReference Include="System.Management">
       <Version>4.7.0</Version>
+    </PackageReference>
+    <PackageReference Include="System.Reactive">
+      <Version>4.3.2</Version>
     </PackageReference>
     <PackageReference Include="System.Threading.Tasks.Dataflow">
       <Version>4.11.0</Version>

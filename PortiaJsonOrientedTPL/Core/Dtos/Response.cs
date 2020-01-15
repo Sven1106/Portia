@@ -1,4 +1,4 @@
-﻿namespace PortiaJsonOrientedMultiThread.Core.Dtos
+﻿namespace PortiaJsonOrientedTPL.Core.Dtos
 {
     public class Response
     {

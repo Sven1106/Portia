@@ -4,20 +4,19 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PortiaJsonOrientedMultiThread.Core.Models
+namespace PortiaJsonOriented.Core.Models
 {
-    public class UrlHtmlPair
+    public class HtmlContent
     {
         public Uri Url { get; set; }
         public string Html { get; set; }
-        public UrlHtmlPair(Uri url, string html)
+        public HtmlContent(Uri url, string html)
         {
             Url = url;
             Html = html;
         }
-        public UrlHtmlPair()
+        public HtmlContent()
         {
         }
-
     }
 }

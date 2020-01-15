@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PortiaJsonOrientedMultiThread.Core.Models
+namespace PortiaJsonOriented.Core.Models
 {
     public class Task
     {

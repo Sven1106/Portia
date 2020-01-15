@@ -20,16 +20,17 @@ namespace PortiaJsonOriented
     {
         static async Task Main(string[] args)
         {
-            var json = File.ReadAllText("request.json");
+            string solutionRootPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), @"..\..\..\"));
+            var json = File.ReadAllText(Path.Combine(solutionRootPath, "request.json"));
 
             JSchemaValidatingReader jSchemaReader = new JSchemaValidatingReader(new JsonTextReader(new StringReader(json)));
-            jSchemaReader.Schema = JSchema.Parse(File.ReadAllText("requestSchema.json"));
+            jSchemaReader.Schema = JSchema.Parse(File.ReadAllText(Path.Combine(solutionRootPath, "requestSchema.json")));
 
             IList<string> errorMessages = new List<string>();
             jSchemaReader.ValidationEventHandler += (o, a) => errorMessages.Add(a.Message);
             JsonSerializer serializer = new JsonSerializer();
             Request request = serializer.Deserialize<Request>(jSchemaReader);
-            if(errorMessages.Count > 0)
+            if (errorMessages.Count > 0)
             {
                 foreach (var eventMessage in errorMessages)
                 {

@@ -1,7 +1,8 @@
 {
   "projectName": "Arla",
-  "startUrl": "https://www.arla.dk/opskrifter",
-  "data": [
+  "startUrl": "https://www.arla.dk/opskrifter/",
+  "disallowedStrings": [ "/sog/?query" ],
+  "tasks": [
     {
       "taskName": "allRecipes",
       "items": [

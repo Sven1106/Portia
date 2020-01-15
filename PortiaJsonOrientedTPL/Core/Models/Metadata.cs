@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PortiaJsonOrientedMultiThread.Core.Models
+namespace PortiaJsonOrientedTPL.Core.Models
 {
     public class Metadata
     {

@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
-using PortiaJsonOrientedMultiThread.Core.Models;
+using PortiaJsonOrientedTPL.Core.Models;
 
-namespace PortiaJsonOrientedMultiThread.Core.Dtos
+namespace PortiaJsonOrientedTPL.Core.Dtos
 {
     public class Request
     {

@@ -4,9 +4,9 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PortiaJsonOriented.Core.Models
+namespace PortiaJsonOrientedTPL.Core.Models
 {
-    public class DataForRequest
+    public class Task
     {
         public string TaskName { get; set; }
         public List<NodeAttribute> Items { get; set; }

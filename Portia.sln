@@ -5,7 +5,7 @@ VisualStudioVersion = 16.0.28803.452
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PortiaObjectOriented", "PortiaObjectOriented\PortiaObjectOriented.csproj", "{7C630930-4F89-44E4-A019-F8FA1C78909E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PortiaJsonOrientedMultiThread", "PortiaJsonOrientedMultiThread\PortiaJsonOrientedMultiThread.csproj", "{B80B0D6F-0644-4A64-952B-E9B5877D8824}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PortiaJsonOrientedTPL", "PortiaJsonOrientedTPL\PortiaJsonOrientedTPL.csproj", "{B80B0D6F-0644-4A64-952B-E9B5877D8824}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PortiaJsonOriented", "PortiaJsonOriented\PortiaJsonOriented.csproj", "{58EFE9DA-E372-4A19-9E44-3FA32E648A46}"
 EndProject

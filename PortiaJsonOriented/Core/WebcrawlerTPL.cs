@@ -8,29 +8,24 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Management;
 using System.Threading.Tasks;
-using System.Threading.Tasks.Dataflow;
 using System.Xml.XPath;
 using PuppeteerSharp;
-using PortiaJsonOrientedMultiThread.Core.Models;
+using PortiaJsonOriented.Core.Models;
 using Task = System.Threading.Tasks.Task;
-using PortiaTask = PortiaJsonOrientedMultiThread.Core.Models.Task;
-using PortiaResponse = PortiaJsonOrientedMultiThread.Core.Dtos.Response;
-using PortiaRequest = PortiaJsonOrientedMultiThread.Core.Dtos.Request;
-using System.Text;
-using PortiaJsonOrientedMultiThread.Core;
+using PortiaTask = PortiaJsonOriented.Core.Models.Task;
+using PortiaResponse = PortiaJsonOriented.Core.Dtos.Response;
+using PortiaRequest = PortiaJsonOriented.Core.Dtos.Request;
+using PortiaJsonOriented.Core;
+using System.Threading.Tasks.Dataflow;
+using System.Management;
 
-namespace PortiaJsonOrientedMultiThread
+namespace PortiaJsonOriented
 {
-
-
-
-
-    public class Webcrawler
+    public class WebcrawlerTpl
     {
         private static Uri rootUrl;
-        private static List<PortiaTask> tasksForRequest = new List<PortiaTask>();
+        private static List<PortiaTask> tasksFromRequest = new List<PortiaTask>();
         private static IList<string> disallowedStrings = new List<string>() { };
         private static ConcurrentDictionary<string, JArray> dataByTask = new ConcurrentDictionary<string, JArray>();
         private static BlockingCollection<Uri> legalUrlsQueue = new BlockingCollection<Uri>();
@@ -38,19 +33,18 @@ namespace PortiaJsonOrientedMultiThread
 
         private CrashDump crashDump;
         private Browser browser;
-        private TransformBlock<Uri, UrlHtmlPair> htmlDownloader;
-        private TransformManyBlock<UrlHtmlPair, Uri> urlParser;
-        private TransformManyBlock<UrlHtmlPair, Uri> siteMapParser;
-        private ActionBlock<UrlHtmlPair> objParser;
+        private TransformBlock<Uri, HtmlContent> htmlDownloader;
+        private TransformManyBlock<HtmlContent, Uri> urlParser;
+        private ActionBlock<HtmlContent> objParser;
 
         private BroadcastBlock<Uri> urlBroadcaster;
         private BroadcastBlock<Uri> legalUrlBroadcaster;
-        private BroadcastBlock<UrlHtmlPair> htmlContentBroadcaster;
+        private BroadcastBlock<HtmlContent> htmlContentBroadcaster;
 
-        public void KillPuppeteerChromiumProcesesses()
+        public void KillPuppeteerIfRunning()
         {
             var puppeteerExecutablePath = new BrowserFetcher().GetExecutablePath(BrowserFetcher.DefaultRevision).Replace(@"\", @"\\");
-            List<int> processIds = new List<int>();
+            List<int> processIdsToKill = new List<int>();
             string wmiQueryString = @"SELECT ProcessId, ExecutablePath FROM Win32_Process WHERE ExecutablePath LIKE '" + puppeteerExecutablePath + "'";
             using (var searcher = new ManagementObjectSearcher(wmiQueryString))
             {
@@ -61,16 +55,15 @@ namespace PortiaJsonOrientedMultiThread
                         if (item != null)
                         {
                             var processId = Convert.ToInt32(item["ProcessId"]);
-                            processIds.Add(processId);
+                            processIdsToKill.Add(processId);
                         }
                     }
                 }
             }
-            List<Process> processes = Process.GetProcesses().Where(p => processIds.Where(x => x == p.Id).Any()).ToList();
-            if (processes.Count > 0)// Is running
+            List<Process> processesToKill = Process.GetProcesses().Where(p => processIdsToKill.Where(x => x == p.Id).Any()).ToList();
+            if (processesToKill.Count > 0)// Is running
             {
-
-                processes.ForEach((x) =>
+                processesToKill.ForEach((x) =>
                 {
                     x.Kill();
                 });
@@ -79,7 +72,7 @@ namespace PortiaJsonOrientedMultiThread
         public async Task CreateBlocks()
         {
             #region init Puppeteer
-            KillPuppeteerChromiumProcesesses();
+            KillPuppeteerIfRunning();
             await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultRevision);
             var args = new string[] {
                 "--no-sandbox",
@@ -90,12 +83,12 @@ namespace PortiaJsonOrientedMultiThread
                 "--disable-permissions-api", "--disable-background-networking", "--disable-3d-apis",
                 "--disable-bundled-ppapi-flash"
             };
-            var launchOptions = new LaunchOptions { Headless = true, Args = args, IgnoreHTTPSErrors = true };
+            var launchOptions = new LaunchOptions { Headless = false, Args = args, IgnoreHTTPSErrors = true };
             browser = await Puppeteer.LaunchAsync(launchOptions);
             #endregion
             var htmlDownloaderOptions = new ExecutionDataflowBlockOptions
             {
-                BoundedCapacity = -1, // the size of the block input buffer
+                BoundedCapacity = -1, // the size of the block input buffer. Handles memory ?
                 MaxDegreeOfParallelism = 3, // by default Tpl dataflow assign a single task per block
                 MaxMessagesPerTask = 2, //enforce fairness, after handling n messages the block's task will be re-schedule.
                 EnsureOrdered = false
@@ -105,45 +98,38 @@ namespace PortiaJsonOrientedMultiThread
             {
                 return url;
             });
+
             legalUrlBroadcaster = new BroadcastBlock<Uri>(url =>
             {
                 legalUrlsQueue.TryAdd(url);
                 return url;
             });
-            htmlDownloader = new TransformBlock<Uri, UrlHtmlPair>(
-                async url =>
-                {
-                    UrlHtmlPair urlHtmlPair = await GetUrlHtmlPairAsync(url, browser);
-                    visitedUrlsQueue.TryAdd(url);
-                    return urlHtmlPair;
-                },
-                htmlDownloaderOptions);
 
-            htmlContentBroadcaster = new BroadcastBlock<UrlHtmlPair>(urlHtml => urlHtml);
-            objParser = new ActionBlock<UrlHtmlPair>(urlHtmlPair => ParseObjs(urlHtmlPair));
-            urlParser = new TransformManyBlock<UrlHtmlPair, Uri>(urlHtmlPair =>
+            htmlDownloader = new TransformBlock<Uri, HtmlContent>(async url =>
             {
-                var newUrls = ParseHtmlToUrls(urlHtmlPair.Html);
-                return newUrls;
-            });
+                HtmlContent htmlContent = await GetHtmlContentAsync(url, browser);
+                visitedUrlsQueue.TryAdd(url);
+                return htmlContent;
+            },
+            htmlDownloaderOptions);
 
-            siteMapParser = new TransformManyBlock<UrlHtmlPair, Uri>(urlHtmlPair =>
+            htmlContentBroadcaster = new BroadcastBlock<HtmlContent>(urlHtml => urlHtml);
+            objParser = new ActionBlock<HtmlContent>(htmlContent => ParseObjects(htmlContent, tasksFromRequest));
+            urlParser = new TransformManyBlock<HtmlContent, Uri>(htmlContent =>
             {
-                var newUrls = ParseHtmlToUrls(urlHtmlPair.Html);
+                var newUrls = GetAllAbsoluteUrlsFromHtml(htmlContent.Html);
                 return newUrls;
             });
 
         }
-        public void ConfigureBlocksForCircularFlow()
+
+        public void ConfigureBlocksForFeedbackLoop()
         {
+
             var linkOptions = new DataflowLinkOptions { PropagateCompletion = true };
-            Predicate<Uri> legalUrlFilter = url =>
+            Predicate<Uri> urlFilter = url =>
             {
-                if (IsUrlLegal(url) == false)
-                {
-                    return false;
-                }
-                return true;
+                return IsUrlLegal(url);
             };
 
             legalUrlBroadcaster.LinkTo(htmlDownloader, linkOptions);
@@ -151,12 +137,16 @@ namespace PortiaJsonOrientedMultiThread
             htmlContentBroadcaster.LinkTo(objParser, linkOptions);
             htmlContentBroadcaster.LinkTo(urlParser, linkOptions);
             urlParser.LinkTo(urlBroadcaster, linkOptions);
-            urlBroadcaster.LinkTo(legalUrlBroadcaster, linkOptions, legalUrlFilter);
+            urlBroadcaster.LinkTo(legalUrlBroadcaster, linkOptions, urlFilter);
         }
 
-        public void ConfigureBlocksForLinearFlow()
+        public void ConfigureBlocksForFixedListOfUrls()
         {
             var linkOptions = new DataflowLinkOptions { PropagateCompletion = true };
+            Predicate<Uri> legalUrlFilter = url =>
+            {
+                return IsUrlLegal(url);
+            };
             legalUrlBroadcaster.LinkTo(htmlDownloader, linkOptions);
             htmlDownloader.LinkTo(htmlContentBroadcaster, linkOptions);
             htmlContentBroadcaster.LinkTo(objParser, linkOptions);
@@ -181,11 +171,10 @@ namespace PortiaJsonOrientedMultiThread
             }
         }
 
-
         public async Task Monitor()
         {
             int secondIntervalToCheck = 5;
-            int maxTimeoutCount = 6;
+            int maxTimeoutCount = 2;
             int currentTimeOutCount = 0;
             int currentLegalUrlsCount = 0;
             int currentVisitedUrlsCount = 0;
@@ -200,6 +189,7 @@ namespace PortiaJsonOrientedMultiThread
                 if (isTimedOut)
                 {
                     currentTimeOutCount++;
+                    Console.WriteLine("Timeout in: {0}", secondIntervalToCheck * (maxTimeoutCount + 1) - secondIntervalToCheck * currentTimeOutCount);
                 }
                 else
                 {
@@ -208,20 +198,21 @@ namespace PortiaJsonOrientedMultiThread
                 bool maxTimeoutHit = currentTimeOutCount >= maxTimeoutCount;
                 if (maxTimeoutHit) //TIMED OUT
                 {
-                    Dictionary<string, string> jsonByVariableName = new Dictionary<string, string>();
-                    jsonByVariableName.Add(nameof(legalUrlsQueue), JsonConvert.SerializeObject(legalUrlsQueue));
-                    jsonByVariableName.Add(nameof(dataByTask), JsonConvert.SerializeObject(dataByTask));
-                    jsonByVariableName.Add(nameof(visitedUrlsQueue), JsonConvert.SerializeObject(visitedUrlsQueue));
-                    await crashDump.CreateDumpFiles(jsonByVariableName);
-                    KillPuppeteerChromiumProcesesses();
+                    bool isUrlCountEqual = legalUrlsQueue.Count == visitedUrlsQueue.Count;
+                    if (isUrlCountEqual == false)
+                    {
+                        Dictionary<string, string> jsonByVariableName = new Dictionary<string, string>();
+                        jsonByVariableName.Add(nameof(legalUrlsQueue), JsonConvert.SerializeObject(legalUrlsQueue));
+                        jsonByVariableName.Add(nameof(dataByTask), JsonConvert.SerializeObject(dataByTask));
+                        jsonByVariableName.Add(nameof(visitedUrlsQueue), JsonConvert.SerializeObject(visitedUrlsQueue));
+                        await crashDump.CreateDumpFiles(jsonByVariableName);
+                        KillPuppeteerIfRunning();
+                    }
                     legalUrlBroadcaster.Complete();
                 }
 
-                bool isUrlCountEqual = legalUrlsQueue.Count == visitedUrlsQueue.Count;
-                if (isUrlCountEqual && nothingInTransformBlocks)
-                {
-                    legalUrlBroadcaster.Complete();
-                }
+
+
                 currentLegalUrlsCount = legalUrlsQueue.Count;
                 currentVisitedUrlsCount = visitedUrlsQueue.Count;
                 await Task.Delay(secondIntervalToCheck * 1000);
@@ -232,33 +223,15 @@ namespace PortiaJsonOrientedMultiThread
         {
             Console.WriteLine("Starting");
             rootUrl = new Uri(request.StartUrl);
-            tasksForRequest = request.Tasks;
+            tasksFromRequest = request.Tasks;
             disallowedStrings = request.DisallowedStrings;
+            //TODO Add /robots.txt handling eg. Sitemap, Disallow
 
-            foreach (PortiaTask task in tasksForRequest)
+            foreach (PortiaTask task in tasksFromRequest)
             {
                 dataByTask.TryAdd(task.TaskName, new JArray());
             }
             await CreateBlocks();
-
-
-            #region Check if sitemap
-            UrlHtmlPair rootUrlHtml = await GetUrlHtmlPairAsync(rootUrl, browser);
-
-
-
-            #endregion
-
-
-            bool isRootUrlASiteMap = true;
-            if (isRootUrlASiteMap)
-            {
-                ConfigureBlocksForLinearFlow();
-            }
-            else
-            {
-                ConfigureBlocksForCircularFlow();
-            }
 
             #region unfinishedWork
             crashDump = new CrashDump("GUID");
@@ -267,18 +240,59 @@ namespace PortiaJsonOrientedMultiThread
             {
                 dataByTask = JsonConvert.DeserializeObject<ConcurrentDictionary<string, JArray>>(allUnfinishedWork[nameof(dataByTask)]);
 
-                var legalUrls = JsonConvert.DeserializeObject<ICollection<Uri>>(allUnfinishedWork[nameof(legalUrlsQueue)]).ToList();
+                List<Uri> legalUrls = JsonConvert.DeserializeObject<ICollection<Uri>>(allUnfinishedWork[nameof(legalUrlsQueue)]).ToList();
                 legalUrls.ForEach(lu => legalUrlsQueue.TryAdd(lu));
 
-                var visitedUrls = JsonConvert.DeserializeObject<ICollection<Uri>>(allUnfinishedWork[nameof(visitedUrlsQueue)]).ToList();
+                List<Uri> visitedUrls = JsonConvert.DeserializeObject<ICollection<Uri>>(allUnfinishedWork[nameof(visitedUrlsQueue)]).ToList();
                 visitedUrls.ForEach(vu => visitedUrlsQueue.TryAdd(vu));
 
-                var unfinishedUrls = legalUrls.Except(visitedUrls).ToList();
+                List<Uri> unfinishedUrls = legalUrls.Except(visitedUrls).ToList();
                 unfinishedUrls.ForEach(async (uu) => await legalUrlBroadcaster.SendAsync(uu));
             }
+            else
+            {
+                await legalUrlBroadcaster.SendAsync(rootUrl);
+            }
             #endregion
-            await legalUrlBroadcaster.SendAsync(rootUrl);
-            Task render = Render();
+
+            #region Configuring Blocks
+            bool isFixedListOfUrls = false; //Add bool to Request.JSON
+            if (isFixedListOfUrls)
+            {
+                //ConfigureBlocksForFixedListOfUrls();
+                var linkOptions = new DataflowLinkOptions { PropagateCompletion = true };
+                Predicate<Uri> legalUrlFilter = url =>
+                {
+                    return IsUrlLegal(url);
+                };
+                legalUrlBroadcaster.LinkTo(htmlDownloader, linkOptions);
+                htmlDownloader.LinkTo(htmlContentBroadcaster, linkOptions);
+                htmlContentBroadcaster.LinkTo(objParser, linkOptions);
+                htmlContentBroadcaster.LinkTo(urlParser, linkOptions);
+                urlParser.LinkTo(urlBroadcaster, linkOptions);
+                urlBroadcaster.LinkTo(legalUrlBroadcaster, linkOptions, legalUrlFilter);
+
+
+
+
+
+
+
+
+                // https://stackoverflow.com/questions/24631767/tpl-dataflow-how-to-remove-the-link-between-the-blocks
+                legalUrlBroadcaster.LinkTo(htmlDownloader, linkOptions);
+                htmlDownloader.LinkTo(htmlContentBroadcaster, linkOptions);
+                htmlContentBroadcaster.LinkTo(objParser, linkOptions);
+            }
+            else
+            {
+                ConfigureBlocksForFeedbackLoop();
+            }
+            #endregion
+
+
+
+            //  Task render = Render();
             Task monitor = Monitor();
             await Task.WhenAll(monitor);
             await browser.CloseAsync();
@@ -294,25 +308,57 @@ namespace PortiaJsonOrientedMultiThread
             };
             return response;
         }
-        static async Task<UrlHtmlPair> GetUrlHtmlPairAsync(Uri url, Browser browser)
+        private async Task<HtmlContent> GetHtmlContentAsync(Uri url, Browser browser)
         {
             string html;
             using (Page page = await browser.NewPageAsync())
             {
                 await page.SetRequestInterceptionAsync(true);
-                page.Request += Page_Request;
+                page.Request += async (sender, e) =>
+                {
+                    try
+                    {
+                        switch (e.Request.ResourceType)
+                        {
+                            case ResourceType.Media:
+                            case ResourceType.StyleSheet:
+                            case ResourceType.Image:
+                            case ResourceType.Unknown:
+                            case ResourceType.Font:
+                            case ResourceType.TextTrack:
+                            case ResourceType.Xhr:
+                            case ResourceType.Fetch:
+                            case ResourceType.EventSource:
+                            case ResourceType.WebSocket:
+                            case ResourceType.Manifest:
+                            case ResourceType.Ping:
+                            case ResourceType.Other:
+                                await e.Request.AbortAsync();
+                                break;
+                            case ResourceType.Document:
+                            case ResourceType.Script:
+                            default:
+                                await e.Request.ContinueAsync();
+                                break;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error => {ex.Message}");
+                        await e.Request.ContinueAsync();
+                    }
+                };
                 await page.GoToAsync(url.ToString());
                 html = await page.GetContentAsync();
             }
-            return new UrlHtmlPair(url, html);
+            return new HtmlContent(url, html);
         }
-        static List<Uri> ParseHtmlToUrls(string html)
+        private List<Uri> GetAllAbsoluteUrlsFromHtml(string html)
         {
             HtmlDocument htmlDoc = new HtmlDocument();
             htmlDoc.LoadHtml(html);
-            List<Uri> newUrls = new List<Uri>();
-            var urlset = htmlDoc.DocumentNode.SelectSingleNode("//urlset[starts-with(@xmlns, 'http://www.sitemaps.org')]"); // if sitemap
-            if (urlset != null)
+            List<Uri> urlsFound = new List<Uri>();
+            if (htmlDoc.DocumentNode.SelectSingleNode("//urlset[starts-with(@xmlns, 'http://www.sitemaps.org')]") != null) // if sitemap)
             {
                 var locs = htmlDoc.DocumentNode.SelectNodes("//loc");
                 if (locs != null)
@@ -321,7 +367,7 @@ namespace PortiaJsonOrientedMultiThread
                     {
                         string value = loc.InnerText;
                         Uri url = new Uri(value, UriKind.RelativeOrAbsolute);
-                        newUrls.Add(url);
+                        urlsFound.Add(url);
                     }
                 }
             }
@@ -335,18 +381,19 @@ namespace PortiaJsonOrientedMultiThread
                         string hrefValue = aTag.Attributes["href"].Value;
                         Uri url = new Uri(hrefValue, UriKind.RelativeOrAbsolute);
                         url = new Uri(rootUrl, url);
-                        newUrls.Add(url);
+                        urlsFound.Add(url);
                     }
                 }
             }
-            return newUrls;
+            return urlsFound;
         }
-        private static void ParseObjs(UrlHtmlPair urlHtmlPair)
+        
+        private void ParseObjects(HtmlContent htmlContent, List<PortiaTask> tasks)
         {
             HtmlDocument htmlDoc = new HtmlDocument();
-            htmlDoc.LoadHtml(urlHtmlPair.Html);
+            htmlDoc.LoadHtml(htmlContent.Html);
             HtmlNode documentNode = htmlDoc.DocumentNode;
-            foreach (PortiaTask task in tasksForRequest)
+            foreach (PortiaTask task in tasks)
             {
                 JObject taskObject = new JObject();
                 foreach (NodeAttribute item in task.Items)
@@ -357,7 +404,7 @@ namespace PortiaJsonOrientedMultiThread
                         continue;
                     }
                     taskObject.Add(item.Name, value);
-                    Metadata metadata = new Metadata(urlHtmlPair.Url.ToString(), DateTime.UtcNow);
+                    Metadata metadata = new Metadata(htmlContent.Url.ToString(), DateTime.UtcNow);
                     taskObject.Add("metadata", JObject.FromObject(metadata, new JsonSerializer()
                     {
                         ContractResolver = new CamelCasePropertyNamesContractResolver()
@@ -369,10 +416,9 @@ namespace PortiaJsonOrientedMultiThread
                     continue;
                 }
                 dataByTask[task.TaskName].Add(taskObject);
-
             }
         }
-        private static JToken GetValueForJTokenRecursive(NodeAttribute node, HtmlNode htmlNode)
+        private JToken GetValueForJTokenRecursive(NodeAttribute node, HtmlNode htmlNode)
         {
             JToken jToken = "";
             if (node.GetMultipleFromPage) // TODO
@@ -447,13 +493,12 @@ namespace PortiaJsonOrientedMultiThread
             }
             return jToken;
         }
-        private static bool IsUrlLegal(Uri url)
+        private bool IsUrlLegal(Uri url)
         {
-            bool isRootUrlASiteMap = rootUrl.OriginalString.Contains("sitemap");
-            bool doesUrlContainRootUrl = url.OriginalString.Contains(rootUrl.OriginalString);
+            bool isUrlFromSameDomainAsRootUrl = url.OriginalString.Contains(rootUrl.OriginalString);
             bool doesUrlAlreadyExistInLegalUrls = legalUrlsQueue.Contains(url);
             bool doesUrlContainAnyDisallowedStrings = Helper.ContainsAnyWords(url, disallowedStrings);
-            if (isRootUrlASiteMap == false && doesUrlContainRootUrl == false ||
+            if (isUrlFromSameDomainAsRootUrl == false ||
                  doesUrlAlreadyExistInLegalUrls == true ||
                  doesUrlContainAnyDisallowedStrings == true)
             {
@@ -461,42 +506,7 @@ namespace PortiaJsonOrientedMultiThread
             }
             return true;
         }
-        private static async void Page_Request(object sender, RequestEventArgs e)
-        {
-            try
-            {
-                switch (e.Request.ResourceType)
-                {
-
-                    case ResourceType.Media:
-                    case ResourceType.StyleSheet:
-                    case ResourceType.Image:
-                    case ResourceType.Unknown:
-                    case ResourceType.Font:
-                    case ResourceType.TextTrack:
-                    case ResourceType.Xhr:
-                    case ResourceType.Fetch:
-                    case ResourceType.EventSource:
-                    case ResourceType.WebSocket:
-                    case ResourceType.Manifest:
-                    case ResourceType.Ping:
-                    case ResourceType.Other:
-                        await e.Request.AbortAsync();
-                        break;
-                    case ResourceType.Document:
-                    case ResourceType.Script:
-                    default:
-                        await e.Request.ContinueAsync();
-                        break;
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error => {ex.Message}");
-                await e.Request.ContinueAsync();
-            }
-        }
-        private static void WriteToConsole(ConsoleColor color, string format)
+        private void WriteToConsole(ConsoleColor color, string format)
         {
             Console.ForegroundColor = color;
             Console.WriteLine(format);

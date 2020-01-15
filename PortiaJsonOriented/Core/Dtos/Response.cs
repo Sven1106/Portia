@@ -10,6 +10,6 @@ namespace PortiaJsonOriented.Core.Dtos
     {
         public string ProjectName { get; set; }
         public string StartUrl { get; set; }
-        public dynamic Data { get; set; }
+        public dynamic Task { get; set; }
     }
 }
