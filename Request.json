@@ -1,6 +1,6 @@
 {
   "projectName": "Arla",
-  "startUrl": "https://www.automobile.tn/fr",
+  "startUrl": "https://www.automobile.tn",
   "disallowedStrings": [ "/sog/?query" ],
   "tasks": [
     {
