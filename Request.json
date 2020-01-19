@@ -1,6 +1,6 @@
 {
   "projectName": "Arla",
-  "startUrl": "https://www.automobile.tn",
+  "startUrl": "https://www.arla.dk/sitemap.xml?type=Modules.Recipes.Business.SitemapUrlWriter.RecipeSitemapUrlWriter",
   "disallowedStrings": [ "/sog/?query" ],
   "tasks": [
     {

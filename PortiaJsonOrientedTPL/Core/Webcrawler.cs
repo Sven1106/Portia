@@ -133,7 +133,7 @@ namespace PortiaJsonOrientedTPL
             {
                 return IsUrlLegal(url);
             };
-
+            //CompositeDisposable
             legalUrlBroadcaster.LinkTo(htmlDownloader, linkOptions);
             htmlDownloader.LinkTo(htmlContentBroadcaster, linkOptions);
             htmlContentBroadcaster.LinkTo(objParser, linkOptions);

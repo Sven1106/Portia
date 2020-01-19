@@ -31,7 +31,7 @@ namespace PortiaJsonOriented.Core
                 {
                     Task task = Task.Run(async () =>
                     {
-                        HtmlContent htmlContent = await puppeteerWrapper.GetHtmlContentAsync(new Uri(request.StartUrl));
+                        HtmlContent htmlContent = await puppeteerWrapper.GetHtmlContentAsync(request.StartUrl);
                         content.Add(htmlContent);
                     });
                     tasks.Add(task);

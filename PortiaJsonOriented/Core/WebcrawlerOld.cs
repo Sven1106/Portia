@@ -36,7 +36,7 @@ namespace PortiaJsonOriented
         public async Task<Core.Dtos.Response> StartCrawlerAsync(Core.Dtos.Request request)
         {
             await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultRevision);
-            Uri rootUri = new Uri(request.StartUrl);
+            Uri rootUri = request.StartUrl;
             ConcurrentQueue<Uri> queue = new ConcurrentQueue<Uri>();
             IList<Uri> visitedUrls = new List<Uri>();
             IList<string> blackListedWords = new List<string>() { };

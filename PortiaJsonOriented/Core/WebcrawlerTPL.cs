@@ -25,7 +25,8 @@ namespace PortiaJsonOriented
 {
     public class WebcrawlerTpl
     {
-        private static Uri rootUrl;
+        private static Uri startUrl;
+        private static Uri hostUrl;
         private static List<PortiaTask> tasksFromRequest = new List<PortiaTask>();
         private static IList<string> disallowedStrings = new List<string>() { };
         private static ConcurrentDictionary<string, JArray> dataByTask = new ConcurrentDictionary<string, JArray>();
@@ -41,12 +42,13 @@ namespace PortiaJsonOriented
 
         private BroadcastBlock<Uri> urlBroadcaster;
         private BroadcastBlock<HtmlContent> htmlContentBroadcaster;
+
         public TransformManyBlock<System.Uri, System.Uri> CreateUrlFilterBlock<Uri>()
         {
             var hs = new HashSet<System.Uri>();
             return new TransformManyBlock<System.Uri, System.Uri>(url =>
             {
-                bool isUrlFromSameDomainAsRootUrl = url.OriginalString.Contains(rootUrl.OriginalString);
+                bool isUrlFromSameDomainAsRootUrl = url.OriginalString.Contains(hostUrl.OriginalString);
                 bool doesUrlContainAnyDisallowedStrings = Helper.ContainsAnyWords(url, disallowedStrings);
                 if (isUrlFromSameDomainAsRootUrl == false ||
                      doesUrlContainAnyDisallowedStrings == true)
@@ -78,34 +80,6 @@ namespace PortiaJsonOriented
             objParser = new ActionBlock<HtmlContent>(htmlContent => ParseObjects(htmlContent, tasksFromRequest));
             urlParser = new TransformManyBlock<HtmlContent, Uri>(htmlContent => GetAllAbsoluteUrlsFromHtml(htmlContent.Html));
             urlFilter = CreateUrlFilterBlock<Uri>();
-
-        }
-
-        public CompositeDisposable ConfigureBlocksForFeedbackLoop()
-        {
-            return new CompositeDisposable(
-                urlBroadcaster.LinkTo(urlsQueueLogger),
-                urlBroadcaster.LinkTo(htmlContentDownloader),
-                htmlContentDownloader.LinkTo(htmlContentBroadcaster),
-                htmlContentBroadcaster.LinkTo(urlsVisitedLogger),
-                htmlContentBroadcaster.LinkTo(objParser),
-                htmlContentBroadcaster.LinkTo(urlParser),
-                urlParser.LinkTo(urlFilter),
-                urlFilter.LinkTo(urlBroadcaster)
-            );
-        }
-
-        public CompositeDisposable ConfigureBlocksForFixedListOfUrls()
-        {
-            return new CompositeDisposable(
-                urlBroadcaster.LinkTo(urlsQueueLogger),
-                urlBroadcaster.LinkTo(htmlContentDownloader),
-                htmlContentDownloader.LinkTo(htmlContentBroadcaster),
-                htmlContentBroadcaster.LinkTo(urlsVisitedLogger),
-                htmlContentBroadcaster.LinkTo(urlParser),
-                urlParser.LinkTo(urlFilter),
-                urlFilter.LinkTo(urlBroadcaster)
-            );
         }
 
         public async Task RenderCrawling(int fps = 30)
@@ -168,7 +142,8 @@ namespace PortiaJsonOriented
         public async Task<PortiaResponse> StartCrawlerAsync(PortiaRequest request)
         {
             Console.WriteLine("Starting");
-            rootUrl = new Uri(request.StartUrl);
+            hostUrl = new Uri(request.StartUrl.Scheme + Uri.SchemeDelimiter + request.StartUrl.Host);
+            startUrl = request.StartUrl;
             tasksFromRequest = request.Tasks;
             disallowedStrings = request.DisallowedStrings;
             //TODO Add /robots.txt handling eg. Sitemap, Disallow
@@ -181,29 +156,28 @@ namespace PortiaJsonOriented
             PuppeteerWrapper puppeteerWrapper = await PuppeteerWrapper.CreateAsync();
             CreateBlocks(puppeteerWrapper);
 
-            #region unfinishedWork
-            CrashDump crashDump = new CrashDump("GUID");
-            var remainingWork = await crashDump.AnyCrashDump();
-            if (remainingWork.Count() != 0)
-            {
-                dataByTask = JsonConvert.DeserializeObject<ConcurrentDictionary<string, JArray>>(remainingWork[nameof(dataByTask)]);
+            #region unfinishedWork //TODO
+            //CrashDump crashDump = new CrashDump("GUID");
+            //var remainingWork = await crashDump.AnyCrashDump();
+            //if (remainingWork.Count() != 0)
+            //{
+            //    dataByTask = JsonConvert.DeserializeObject<ConcurrentDictionary<string, JArray>>(remainingWork[nameof(dataByTask)]);
 
-                List<Uri> _urlsQueued = JsonConvert.DeserializeObject<ICollection<Uri>>(remainingWork[nameof(urlsQueued)]).ToList();
-                _urlsQueued.ForEach(lu => urlsQueued.TryAdd(lu));
+            //    List<Uri> _urlsQueued = JsonConvert.DeserializeObject<ICollection<Uri>>(remainingWork[nameof(urlsQueued)]).ToList();
+            //    _urlsQueued.ForEach(lu => urlsQueued.TryAdd(lu));
 
-                List<Uri> _urlsVisited = JsonConvert.DeserializeObject<ICollection<Uri>>(remainingWork[nameof(urlsVisited)]).ToList();
-                _urlsVisited.ForEach(vu => urlsVisited.TryAdd(vu));
+            //    List<Uri> _urlsVisited = JsonConvert.DeserializeObject<ICollection<Uri>>(remainingWork[nameof(urlsVisited)]).ToList();
+            //    _urlsVisited.ForEach(vu => urlsVisited.TryAdd(vu));
 
-                List<Uri> _urlsRemaining = _urlsQueued.Except(_urlsVisited).ToList();
-                _urlsRemaining.ForEach(async (uu) => await htmlContentDownloader.SendAsync(uu));
-            }
-            else
-            {
-                await urlBroadcaster.SendAsync(rootUrl);
-            }
+            //    List<Uri> _urlsRemaining = _urlsQueued.Except(_urlsVisited).ToList();
+            //    _urlsRemaining.ForEach(async (uu) => await htmlContentDownloader.SendAsync(uu));
+            //}
+            //else
+            //{
+            //}
             #endregion
 
-            #region Configuring Blocks
+            await urlBroadcaster.SendAsync(startUrl);
 
             Task render = RenderCrawling();
             bool isFixedListOfUrls = true; //Add bool to Request.JSON
@@ -211,59 +185,58 @@ namespace PortiaJsonOriented
             {
 
                 BufferBlock<Uri> parsedUrls = new BufferBlock<Uri>();
+                urlBroadcaster.LinkTo(urlsQueueLogger);
+                urlBroadcaster.LinkTo(htmlContentDownloader);
+                htmlContentDownloader.LinkTo(htmlContentBroadcaster);
+                htmlContentBroadcaster.LinkTo(urlsVisitedLogger);
+                htmlContentBroadcaster.LinkTo(urlParser);
+                urlParser.LinkTo(urlFilter);
+                urlFilter.LinkTo(parsedUrls);
 
-                CompositeDisposable linkingForUrlParsing = new CompositeDisposable(
-                                urlBroadcaster.LinkTo(urlsQueueLogger),
-                                urlBroadcaster.LinkTo(htmlContentDownloader),
-                                htmlContentDownloader.LinkTo(htmlContentBroadcaster),
-                                htmlContentBroadcaster.LinkTo(urlsVisitedLogger),
-                                htmlContentBroadcaster.LinkTo(urlParser),
-                                urlParser.LinkTo(urlFilter),
-                                urlFilter.LinkTo(parsedUrls)
-               );
                 Task<bool> monitorForUrlParsing = MonitorCrawling();
                 await Task.WhenAll(monitorForUrlParsing);
-                linkingForUrlParsing.Dispose();
-
 
                 CreateBlocks(puppeteerWrapper);
-                CompositeDisposable linkingForObjParsing = new CompositeDisposable(
-                                urlBroadcaster.LinkTo(urlsQueueLogger),
-                                urlBroadcaster.LinkTo(htmlContentDownloader),
-                                htmlContentDownloader.LinkTo(htmlContentBroadcaster),
-                                htmlContentBroadcaster.LinkTo(urlsVisitedLogger),
-                                htmlContentBroadcaster.LinkTo(objParser)
-                );
-                while (parsedUrls.TryReceive(out Uri url))
-                {
-                    await urlBroadcaster.SendAsync(url);
-                }
+                parsedUrls.LinkTo(urlBroadcaster);
+                urlBroadcaster.LinkTo(urlsQueueLogger);
+                urlBroadcaster.LinkTo(htmlContentDownloader);
+                htmlContentDownloader.LinkTo(htmlContentBroadcaster);
+                htmlContentBroadcaster.LinkTo(urlsVisitedLogger);
+                htmlContentBroadcaster.LinkTo(objParser);
+
                 Task<bool> monitorForObjParsing = MonitorCrawling();
                 await Task.WhenAll(monitorForObjParsing);
 
             }
             else
             {
-                var linksForFeedBackLoop = ConfigureBlocksForFeedbackLoop();
+                urlBroadcaster.LinkTo(urlsQueueLogger);
+                urlBroadcaster.LinkTo(htmlContentDownloader);
+                htmlContentDownloader.LinkTo(htmlContentBroadcaster);
+                htmlContentBroadcaster.LinkTo(urlsVisitedLogger);
+                htmlContentBroadcaster.LinkTo(objParser);
+                htmlContentBroadcaster.LinkTo(urlParser);
+                urlParser.LinkTo(urlFilter);
+                urlFilter.LinkTo(urlBroadcaster);
+
                 Task<bool> monitor = MonitorCrawling();
                 await Task.WhenAll(monitor);
-                #region Logging
-                bool successfullyCrawled = monitor.Result;
-                if (successfullyCrawled)
-                {
+                #region Logging //TODO
+                //bool successfullyCrawled = monitor.Result;
+                //if (successfullyCrawled)
+                //{
 
-                }
-                else
-                {
-                    Dictionary<string, string> jsonByVariableName = new Dictionary<string, string>();
-                    jsonByVariableName.Add(nameof(urlsQueued), JsonConvert.SerializeObject(urlsQueued));
-                    jsonByVariableName.Add(nameof(dataByTask), JsonConvert.SerializeObject(dataByTask));
-                    jsonByVariableName.Add(nameof(urlsVisited), JsonConvert.SerializeObject(urlsVisited));
-                    await crashDump.CreateDumpFiles(jsonByVariableName);
-                }
+                //}
+                //else
+                //{
+                //    Dictionary<string, string> jsonByVariableName = new Dictionary<string, string>();
+                //    jsonByVariableName.Add(nameof(urlsQueued), JsonConvert.SerializeObject(urlsQueued));
+                //    jsonByVariableName.Add(nameof(dataByTask), JsonConvert.SerializeObject(dataByTask));
+                //    jsonByVariableName.Add(nameof(urlsVisited), JsonConvert.SerializeObject(urlsVisited));
+                //    await crashDump.CreateDumpFiles(jsonByVariableName);
+                //}
                 #endregion
             }
-            #endregion
 
             Console.WriteLine("Press any key to exit.");
             Console.ReadKey();
@@ -304,7 +277,7 @@ namespace PortiaJsonOriented
                     {
                         string hrefValue = aTag.Attributes["href"].Value;
                         Uri url = new Uri(hrefValue, UriKind.RelativeOrAbsolute);
-                        url = new Uri(rootUrl, url);
+                        url = new Uri(startUrl, url);
                         urlsFound.Add(url);
                     }
                 }
