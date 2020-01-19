@@ -18,7 +18,8 @@ using PortiaResponse = PortiaJsonOriented.Core.Dtos.Response;
 using PortiaRequest = PortiaJsonOriented.Core.Dtos.Request;
 using PortiaJsonOriented.Core;
 using System.Threading.Tasks.Dataflow;
-using System.Management;
+
+using System.Reactive.Disposables;
 
 namespace PortiaJsonOriented
 {
@@ -28,92 +29,39 @@ namespace PortiaJsonOriented
         private static List<PortiaTask> tasksFromRequest = new List<PortiaTask>();
         private static IList<string> disallowedStrings = new List<string>() { };
         private static ConcurrentDictionary<string, JArray> dataByTask = new ConcurrentDictionary<string, JArray>();
-        private static BlockingCollection<Uri> legalUrlsQueue = new BlockingCollection<Uri>();
-        private static BlockingCollection<Uri> visitedUrlsQueue = new BlockingCollection<Uri>();
+        private static BlockingCollection<Uri> urlsQueued = new BlockingCollection<Uri>();
+        private static BlockingCollection<Uri> urlsVisited = new BlockingCollection<Uri>();
 
-        private CrashDump crashDump;
-        private Browser browser;
-        private TransformBlock<Uri, HtmlContent> htmlDownloader;
+        private TransformBlock<Uri, HtmlContent> htmlContentDownloader;
         private TransformManyBlock<HtmlContent, Uri> urlParser;
         private ActionBlock<HtmlContent> objParser;
 
         private BroadcastBlock<Uri> urlBroadcaster;
-        private BroadcastBlock<Uri> legalUrlBroadcaster;
         private BroadcastBlock<HtmlContent> htmlContentBroadcaster;
 
-        public void KillPuppeteerIfRunning()
+        public void CreateBlocks(PuppeteerWrapper puppeteerWrapper)
         {
-            var puppeteerExecutablePath = new BrowserFetcher().GetExecutablePath(BrowserFetcher.DefaultRevision).Replace(@"\", @"\\");
-            List<int> processIdsToKill = new List<int>();
-            string wmiQueryString = @"SELECT ProcessId, ExecutablePath FROM Win32_Process WHERE ExecutablePath LIKE '" + puppeteerExecutablePath + "'";
-            using (var searcher = new ManagementObjectSearcher(wmiQueryString))
+
+            urlBroadcaster = new BroadcastBlock<Uri>(url =>
             {
-                using (var results = searcher.Get())
-                {
-                    foreach (var item in results)
-                    {
-                        if (item != null)
-                        {
-                            var processId = Convert.ToInt32(item["ProcessId"]);
-                            processIdsToKill.Add(processId);
-                        }
-                    }
-                }
-            }
-            List<Process> processesToKill = Process.GetProcesses().Where(p => processIdsToKill.Where(x => x == p.Id).Any()).ToList();
-            if (processesToKill.Count > 0)// Is running
+                urlsQueued.TryAdd(url);
+                return url;
+            });
+
+            htmlContentDownloader = new TransformBlock<Uri, HtmlContent>(async url =>
             {
-                processesToKill.ForEach((x) =>
-                {
-                    x.Kill();
-                });
-            }
-        }
-        public async Task CreateBlocks()
-        {
-            #region init Puppeteer
-            KillPuppeteerIfRunning();
-            await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultRevision);
-            var args = new string[] {
-                "--no-sandbox",
-                "--disable-plugins", "--disable-sync", "--disable-gpu", "--disable-speech-api",
-                "--disable-remote-fonts", "--disable-shared-workers", "--disable-webgl", "--no-experiments",
-                "--no-first-run", "--no-default-browser-check", "--no-wifi", "--no-pings", "--no-service-autorun",
-                "--disable-databases", "--disable-default-apps", "--disable-demo-mode", "--disable-notifications",
-                "--disable-permissions-api", "--disable-background-networking", "--disable-3d-apis",
-                "--disable-bundled-ppapi-flash"
-            };
-            var launchOptions = new LaunchOptions { Headless = false, Args = args, IgnoreHTTPSErrors = true };
-            browser = await Puppeteer.LaunchAsync(launchOptions);
-            #endregion
-            var htmlDownloaderOptions = new ExecutionDataflowBlockOptions
+                HtmlContent htmlContent = await puppeteerWrapper.GetHtmlContentAsync(url);
+                urlsVisited.TryAdd(url);
+                return htmlContent;
+            }, new ExecutionDataflowBlockOptions
             {
                 BoundedCapacity = -1, // the size of the block input buffer. Handles memory ?
                 MaxDegreeOfParallelism = 3, // by default Tpl dataflow assign a single task per block
                 MaxMessagesPerTask = 2, //enforce fairness, after handling n messages the block's task will be re-schedule.
                 EnsureOrdered = false
-            };
-
-            urlBroadcaster = new BroadcastBlock<Uri>(url =>
-            {
-                return url;
             });
 
-            legalUrlBroadcaster = new BroadcastBlock<Uri>(url =>
-            {
-                legalUrlsQueue.TryAdd(url);
-                return url;
-            });
-
-            htmlDownloader = new TransformBlock<Uri, HtmlContent>(async url =>
-            {
-                HtmlContent htmlContent = await GetHtmlContentAsync(url, browser);
-                visitedUrlsQueue.TryAdd(url);
-                return htmlContent;
-            },
-            htmlDownloaderOptions);
-
-            htmlContentBroadcaster = new BroadcastBlock<HtmlContent>(urlHtml => urlHtml);
+            htmlContentBroadcaster = new BroadcastBlock<HtmlContent>(htmlContent => htmlContent);
             objParser = new ActionBlock<HtmlContent>(htmlContent => ParseObjects(htmlContent, tasksFromRequest));
             urlParser = new TransformManyBlock<HtmlContent, Uri>(htmlContent =>
             {
@@ -123,45 +71,34 @@ namespace PortiaJsonOriented
 
         }
 
-        public void ConfigureBlocksForFeedbackLoop()
+        public CompositeDisposable ConfigureBlocksForFeedbackLoop()
         {
-
-            var linkOptions = new DataflowLinkOptions { PropagateCompletion = true };
-            Predicate<Uri> urlFilter = url =>
-            {
-                return IsUrlLegal(url);
-            };
-
-            legalUrlBroadcaster.LinkTo(htmlDownloader, linkOptions);
-            htmlDownloader.LinkTo(htmlContentBroadcaster, linkOptions);
-            htmlContentBroadcaster.LinkTo(objParser, linkOptions);
-            htmlContentBroadcaster.LinkTo(urlParser, linkOptions);
-            urlParser.LinkTo(urlBroadcaster, linkOptions);
-            urlBroadcaster.LinkTo(legalUrlBroadcaster, linkOptions, urlFilter);
+            CompositeDisposable blocksForFeedBackLoop = new CompositeDisposable(
+                urlBroadcaster.LinkTo(htmlContentDownloader, url => IsUrlLegal(url)),
+                htmlContentDownloader.LinkTo(htmlContentBroadcaster),
+                htmlContentBroadcaster.LinkTo(objParser),
+                htmlContentBroadcaster.LinkTo(urlParser),
+                urlParser.LinkTo(urlBroadcaster)
+            );
+            return blocksForFeedBackLoop;
         }
 
         public void ConfigureBlocksForFixedListOfUrls()
         {
-            var linkOptions = new DataflowLinkOptions { PropagateCompletion = true };
-            Predicate<Uri> legalUrlFilter = url =>
-            {
-                return IsUrlLegal(url);
-            };
-            legalUrlBroadcaster.LinkTo(htmlDownloader, linkOptions);
-            htmlDownloader.LinkTo(htmlContentBroadcaster, linkOptions);
-            htmlContentBroadcaster.LinkTo(objParser, linkOptions);
+            urlBroadcaster.LinkTo(htmlContentDownloader);
+            htmlContentDownloader.LinkTo(htmlContentBroadcaster);
+            htmlContentBroadcaster.LinkTo(objParser);
         }
 
-        public async Task Render(int fps = 30)
+        public async Task RenderCrawling(int fps = 30)
         {
-            while (!legalUrlBroadcaster.Completion.IsCompleted)
+            while (!urlBroadcaster.Completion.IsCompleted)
             {
-                string format = $"\nlegal urls:                          = {legalUrlsQueue.Count}    " +
-                                $"\nurls visited:                        = {visitedUrlsQueue.Count}    " +
+                string format = $"\nurls queued:                         = {urlsQueued.Count}    " +
+                                $"\nurls visited:                        = {urlsVisited.Count}    " +
                                 $"\nurlBroadcaster:         is completed = {urlBroadcaster.Completion.IsCompleted}    " +
-                                $"\nlegalUrlBroadcaster:    is completed = {legalUrlBroadcaster.Completion.IsCompleted}    " +
                                 $"\nhtmlContentBroadcaster: is completed = {htmlContentBroadcaster.Completion.IsCompleted}    " +
-                                $"\nhtmlDownloader:         is completed = {htmlDownloader.Completion.IsCompleted}, input={htmlDownloader.InputCount}, output={htmlDownloader.OutputCount}    " +
+                                $"\nhtmlDownloader:         is completed = {htmlContentDownloader.Completion.IsCompleted}, input={htmlContentDownloader.InputCount}, output={htmlContentDownloader.OutputCount}    " +
                                 $"\nurlParser:              is completed = {urlParser.Completion.IsCompleted}, input={urlParser.InputCount}, output={urlParser.OutputCount}    " +
                                 $"\nobjParser:              is completed = {objParser.Completion.IsCompleted}, input={objParser.InputCount}    ";
                 ConsoleColor color = ConsoleColor.Yellow;
@@ -171,52 +108,43 @@ namespace PortiaJsonOriented
             }
         }
 
-        public async Task Monitor()
+        public async Task<bool> MonitorCrawling()
         {
-            int secondIntervalToCheck = 5;
-            int maxTimeoutCount = 2;
+            int intervalToCheckInSeconds = 1;
+            int maxTimeoutCount = 5;
             int currentTimeOutCount = 0;
-            int currentLegalUrlsCount = 0;
-            int currentVisitedUrlsCount = 0;
+            int urlsQueuedCount = 0;
+            int currentUrlsVisitedCount = 0;
 
-            while (!legalUrlBroadcaster.Completion.IsCompleted)
+            while (!urlBroadcaster.Completion.IsCompleted)
             {
-                bool nothingInTransformBlocks = htmlDownloader.InputCount == 0 && htmlDownloader.OutputCount == 0
+                bool nothingInTransformBlocks = htmlContentDownloader.InputCount == 0 && htmlContentDownloader.OutputCount == 0
                     && urlParser.InputCount == 0 && urlParser.OutputCount == 0
                     && objParser.InputCount == 0;
-                bool noChangesInQueue = currentLegalUrlsCount == legalUrlsQueue.Count && currentVisitedUrlsCount == visitedUrlsQueue.Count;
+
+                bool noChangesInQueue = urlsQueuedCount == urlsQueued.Count && currentUrlsVisitedCount == urlsVisited.Count;
                 bool isTimedOut = nothingInTransformBlocks && noChangesInQueue;
                 if (isTimedOut)
                 {
                     currentTimeOutCount++;
-                    Console.WriteLine("Timeout in: {0}", secondIntervalToCheck * (maxTimeoutCount + 1) - secondIntervalToCheck * currentTimeOutCount);
+                    //Console.WriteLine("Timeout in: {0}", intervalToCheckInSeconds * (maxTimeoutCount + 1) - intervalToCheckInSeconds * currentTimeOutCount);
                 }
                 else
                 {
                     currentTimeOutCount = 0;
                 }
-                bool maxTimeoutHit = currentTimeOutCount >= maxTimeoutCount;
-                if (maxTimeoutHit) //TIMED OUT
+                bool maxTimeOutHit = currentTimeOutCount >= maxTimeoutCount;
+                if (maxTimeOutHit) //TIMED OUT
                 {
-                    bool isUrlCountEqual = legalUrlsQueue.Count == visitedUrlsQueue.Count;
-                    if (isUrlCountEqual == false)
-                    {
-                        Dictionary<string, string> jsonByVariableName = new Dictionary<string, string>();
-                        jsonByVariableName.Add(nameof(legalUrlsQueue), JsonConvert.SerializeObject(legalUrlsQueue));
-                        jsonByVariableName.Add(nameof(dataByTask), JsonConvert.SerializeObject(dataByTask));
-                        jsonByVariableName.Add(nameof(visitedUrlsQueue), JsonConvert.SerializeObject(visitedUrlsQueue));
-                        await crashDump.CreateDumpFiles(jsonByVariableName);
-                        KillPuppeteerIfRunning();
-                    }
-                    legalUrlBroadcaster.Complete();
+                    urlBroadcaster.Complete();
                 }
 
-
-
-                currentLegalUrlsCount = legalUrlsQueue.Count;
-                currentVisitedUrlsCount = visitedUrlsQueue.Count;
-                await Task.Delay(secondIntervalToCheck * 1000);
+                urlsQueuedCount = urlsQueued.Count;
+                currentUrlsVisitedCount = urlsVisited.Count;
+                await Task.Delay(intervalToCheckInSeconds * 1000);
             }
+            bool succesfullyCrawled = urlsQueued.Count == urlsVisited.Count;
+            return succesfullyCrawled;
         }
 
         public async Task<PortiaResponse> StartCrawlerAsync(PortiaRequest request)
@@ -231,71 +159,102 @@ namespace PortiaJsonOriented
             {
                 dataByTask.TryAdd(task.TaskName, new JArray());
             }
-            await CreateBlocks();
+
+            PuppeteerWrapper puppeteerWrapper = await PuppeteerWrapper.CreateAsync();
+            CreateBlocks(puppeteerWrapper);
 
             #region unfinishedWork
-            crashDump = new CrashDump("GUID");
-            var allUnfinishedWork = await crashDump.AnyCrashDump();
-            if (allUnfinishedWork.Count() != 0)
+            CrashDump crashDump = new CrashDump("GUID");
+            var remainingWork = await crashDump.AnyCrashDump();
+            if (remainingWork.Count() != 0)
             {
-                dataByTask = JsonConvert.DeserializeObject<ConcurrentDictionary<string, JArray>>(allUnfinishedWork[nameof(dataByTask)]);
+                dataByTask = JsonConvert.DeserializeObject<ConcurrentDictionary<string, JArray>>(remainingWork[nameof(dataByTask)]);
 
-                List<Uri> legalUrls = JsonConvert.DeserializeObject<ICollection<Uri>>(allUnfinishedWork[nameof(legalUrlsQueue)]).ToList();
-                legalUrls.ForEach(lu => legalUrlsQueue.TryAdd(lu));
+                List<Uri> _urlsQueued = JsonConvert.DeserializeObject<ICollection<Uri>>(remainingWork[nameof(urlsQueued)]).ToList();
+                _urlsQueued.ForEach(lu => urlsQueued.TryAdd(lu));
 
-                List<Uri> visitedUrls = JsonConvert.DeserializeObject<ICollection<Uri>>(allUnfinishedWork[nameof(visitedUrlsQueue)]).ToList();
-                visitedUrls.ForEach(vu => visitedUrlsQueue.TryAdd(vu));
+                List<Uri> _urlsVisited = JsonConvert.DeserializeObject<ICollection<Uri>>(remainingWork[nameof(urlsVisited)]).ToList();
+                _urlsVisited.ForEach(vu => urlsVisited.TryAdd(vu));
 
-                List<Uri> unfinishedUrls = legalUrls.Except(visitedUrls).ToList();
-                unfinishedUrls.ForEach(async (uu) => await legalUrlBroadcaster.SendAsync(uu));
+                List<Uri> _urlsRemaining = _urlsQueued.Except(_urlsVisited).ToList();
+                _urlsRemaining.ForEach(async (uu) => await htmlContentDownloader.SendAsync(uu));
             }
             else
             {
-                await legalUrlBroadcaster.SendAsync(rootUrl);
+                await urlBroadcaster.SendAsync(rootUrl);
             }
             #endregion
 
             #region Configuring Blocks
+            List<Task> tasks = new List<Task>();
+            Task render = RenderCrawling();
             bool isFixedListOfUrls = false; //Add bool to Request.JSON
             if (isFixedListOfUrls)
             {
+
+                BufferBlock<Uri> tempUrlBroadcaster = new BufferBlock<Uri>();
+
                 //ConfigureBlocksForFixedListOfUrls();
-                var linkOptions = new DataflowLinkOptions { PropagateCompletion = true };
-                Predicate<Uri> legalUrlFilter = url =>
+
+                urlBroadcaster.LinkTo(htmlContentDownloader, url => IsUrlLegal(url));
+                htmlContentDownloader.LinkTo(htmlContentBroadcaster);
+
+                //Task 1
+                //Get all Urls from rootUrl and add to a broadcastBlock.
+                CompositeDisposable part1 = new CompositeDisposable(
+                    htmlContentBroadcaster.LinkTo(urlParser),
+                    urlParser.LinkTo(tempUrlBroadcaster)
+                );
+
+                Task<bool> monitorTask = MonitorCrawling();
+                await Task.WhenAll(monitorTask);
+
+
+                //Task 2. 
+                //// https://stackoverflow.com/questions/24631767/tpl-dataflow-how-to-remove-the-link-between-the-blocks
+                //Dispose htmlContentBroadcaster
+                //Add ObjParser
+                //tempUrlBroadcaster.LinkTo(urlBroadcaster, linkOptions);
+                //htmlContentBroadcaster.LinkTo(objParser, linkOptions);
+                CreateBlocks(puppeteerWrapper);
+                urlBroadcaster.LinkTo(htmlContentDownloader);
+                htmlContentDownloader.LinkTo(htmlContentBroadcaster);
+                CompositeDisposable part2 = new CompositeDisposable(
+                    htmlContentBroadcaster.LinkTo(objParser)
+                );
+                while (tempUrlBroadcaster.TryReceive(out Uri item))
                 {
-                    return IsUrlLegal(url);
-                };
-                legalUrlBroadcaster.LinkTo(htmlDownloader, linkOptions);
-                htmlDownloader.LinkTo(htmlContentBroadcaster, linkOptions);
-                htmlContentBroadcaster.LinkTo(objParser, linkOptions);
-                htmlContentBroadcaster.LinkTo(urlParser, linkOptions);
-                urlParser.LinkTo(urlBroadcaster, linkOptions);
-                urlBroadcaster.LinkTo(legalUrlBroadcaster, linkOptions, legalUrlFilter);
+                    await urlBroadcaster.SendAsync(item);
+                }
+                Task<bool> monitorTask2 = MonitorCrawling();
+                await Task.WhenAll(monitorTask2);
 
 
 
-
-
-
-
-
-                // https://stackoverflow.com/questions/24631767/tpl-dataflow-how-to-remove-the-link-between-the-blocks
-                legalUrlBroadcaster.LinkTo(htmlDownloader, linkOptions);
-                htmlDownloader.LinkTo(htmlContentBroadcaster, linkOptions);
-                htmlContentBroadcaster.LinkTo(objParser, linkOptions);
             }
             else
             {
-                ConfigureBlocksForFeedbackLoop();
+                var linksForFeedBackLoop = ConfigureBlocksForFeedbackLoop();
+                Task<bool> monitorTask = MonitorCrawling();
+                await Task.WhenAll(monitorTask);
+                #region Logging
+                bool successfullyCrawled = monitorTask.Result;
+                if (successfullyCrawled)
+                {
+
+                }
+                else
+                {
+                    Dictionary<string, string> jsonByVariableName = new Dictionary<string, string>();
+                    jsonByVariableName.Add(nameof(urlsQueued), JsonConvert.SerializeObject(urlsQueued));
+                    jsonByVariableName.Add(nameof(dataByTask), JsonConvert.SerializeObject(dataByTask));
+                    jsonByVariableName.Add(nameof(urlsVisited), JsonConvert.SerializeObject(urlsVisited));
+                    await crashDump.CreateDumpFiles(jsonByVariableName);
+                }
+                #endregion
             }
             #endregion
 
-
-
-            //  Task render = Render();
-            Task monitor = Monitor();
-            await Task.WhenAll(monitor);
-            await browser.CloseAsync();
             Console.WriteLine("Press any key to exit.");
             Console.ReadKey();
 
@@ -307,51 +266,6 @@ namespace PortiaJsonOriented
                 Task = dataByTask
             };
             return response;
-        }
-        private async Task<HtmlContent> GetHtmlContentAsync(Uri url, Browser browser)
-        {
-            string html;
-            using (Page page = await browser.NewPageAsync())
-            {
-                await page.SetRequestInterceptionAsync(true);
-                page.Request += async (sender, e) =>
-                {
-                    try
-                    {
-                        switch (e.Request.ResourceType)
-                        {
-                            case ResourceType.Media:
-                            case ResourceType.StyleSheet:
-                            case ResourceType.Image:
-                            case ResourceType.Unknown:
-                            case ResourceType.Font:
-                            case ResourceType.TextTrack:
-                            case ResourceType.Xhr:
-                            case ResourceType.Fetch:
-                            case ResourceType.EventSource:
-                            case ResourceType.WebSocket:
-                            case ResourceType.Manifest:
-                            case ResourceType.Ping:
-                            case ResourceType.Other:
-                                await e.Request.AbortAsync();
-                                break;
-                            case ResourceType.Document:
-                            case ResourceType.Script:
-                            default:
-                                await e.Request.ContinueAsync();
-                                break;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Error => {ex.Message}");
-                        await e.Request.ContinueAsync();
-                    }
-                };
-                await page.GoToAsync(url.ToString());
-                html = await page.GetContentAsync();
-            }
-            return new HtmlContent(url, html);
         }
         private List<Uri> GetAllAbsoluteUrlsFromHtml(string html)
         {
@@ -387,7 +301,6 @@ namespace PortiaJsonOriented
             }
             return urlsFound;
         }
-        
         private void ParseObjects(HtmlContent htmlContent, List<PortiaTask> tasks)
         {
             HtmlDocument htmlDoc = new HtmlDocument();
@@ -398,7 +311,7 @@ namespace PortiaJsonOriented
                 JObject taskObject = new JObject();
                 foreach (NodeAttribute item in task.Items)
                 {
-                    JToken value = GetValueForJTokenRecursive(item, documentNode);
+                    JToken value = GetValueForJTokenRecursively(item, documentNode);
                     if (value.ToString() == "")
                     {
                         continue;
@@ -418,10 +331,10 @@ namespace PortiaJsonOriented
                 dataByTask[task.TaskName].Add(taskObject);
             }
         }
-        private JToken GetValueForJTokenRecursive(NodeAttribute node, HtmlNode htmlNode)
+        private JToken GetValueForJTokenRecursively(NodeAttribute node, HtmlNode htmlNode)
         {
             JToken jToken = "";
-            if (node.GetMultipleFromPage) // TODO
+            if (node.GetMultipleFromPage)
             {
                 JArray jArray = new JArray();
                 if (node.Type.ToLower() == "string" || node.Type.ToLower() == "number" || node.Type.ToLower() == "boolean") // basic types
@@ -447,7 +360,7 @@ namespace PortiaJsonOriented
                         {
                             foreach (var attribute in node.Attributes)
                             {
-                                JToken value = GetValueForJTokenRecursive(attribute, element);
+                                JToken value = GetValueForJTokenRecursively(attribute, element);
                                 if (value.ToString() == "" && attribute.IsRequired)
                                 {
                                     return jToken;
@@ -480,7 +393,7 @@ namespace PortiaJsonOriented
                         JObject jObject = new JObject();
                         foreach (var attribute in node.Attributes)
                         {
-                            JToken value = GetValueForJTokenRecursive(attribute, element);
+                            JToken value = GetValueForJTokenRecursively(attribute, element);
                             if (value.ToString() == "" && attribute.IsRequired)
                             {
                                 return jToken;
@@ -496,7 +409,7 @@ namespace PortiaJsonOriented
         private bool IsUrlLegal(Uri url)
         {
             bool isUrlFromSameDomainAsRootUrl = url.OriginalString.Contains(rootUrl.OriginalString);
-            bool doesUrlAlreadyExistInLegalUrls = legalUrlsQueue.Contains(url);
+            bool doesUrlAlreadyExistInLegalUrls = urlsQueued.Contains(url);
             bool doesUrlContainAnyDisallowedStrings = Helper.ContainsAnyWords(url, disallowedStrings);
             if (isUrlFromSameDomainAsRootUrl == false ||
                  doesUrlAlreadyExistInLegalUrls == true ||

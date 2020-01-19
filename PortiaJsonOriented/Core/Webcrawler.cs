@@ -1,18 +1,18 @@
-﻿using System;
+﻿using HtmlAgilityPack;
+using Newtonsoft.Json.Linq;
+using PortiaJsonOriented.Core.Models;
+using PuppeteerSharp;
+using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Management;
-using System.Text;
 using System.Threading.Tasks;
 using System.Xml.XPath;
-using HtmlAgilityPack;
-using Newtonsoft.Json.Linq;
-using PuppeteerSharp;
-using PortiaJsonOriented.Core.Models;
-using Task = System.Threading.Tasks.Task;
-using Response = PortiaJsonOriented.Core.Dtos.Response;
 using Request = PortiaJsonOriented.Core.Dtos.Request;
+using Response = PortiaJsonOriented.Core.Dtos.Response;
+using Task = System.Threading.Tasks.Task;
 
 namespace PortiaJsonOriented.Core
 {
@@ -20,6 +20,8 @@ namespace PortiaJsonOriented.Core
     {
         public async Task<Response> StartCrawlerAsync(Request request)
         {
+            ConcurrentQueue<Uri> queuedUrls = new ConcurrentQueue<Uri>();
+            ConcurrentQueue<Uri> dequeuedUrls = new ConcurrentQueue<Uri>();
             PuppeteerWrapper puppeteerWrapper = await PuppeteerWrapper.CreateAsync();
             List<Task> tasks = new List<Task>();
             List<HtmlContent> content = new List<HtmlContent>();
@@ -75,7 +77,7 @@ namespace PortiaJsonOriented.Core
             }
             return urlsFound;
         }
-        public static JToken GetValueForJTokenRecursive(NodeAttribute node, HtmlNode htmlNode)
+        public static JToken GetValueForJTokenRecursively(NodeAttribute node, HtmlNode htmlNode)
         {
             JToken jToken = "";
             if (node.GetMultipleFromPage) // TODO
@@ -104,7 +106,7 @@ namespace PortiaJsonOriented.Core
                         {
                             foreach (var attribute in node.Attributes)
                             {
-                                JToken value = GetValueForJTokenRecursive(attribute, element);
+                                JToken value = GetValueForJTokenRecursively(attribute, element);
                                 if (value.ToString() == "" && attribute.IsRequired)
                                 {
                                     return jToken;
@@ -137,7 +139,7 @@ namespace PortiaJsonOriented.Core
                         JObject jObject = new JObject();
                         foreach (var attribute in node.Attributes)
                         {
-                            JToken value = GetValueForJTokenRecursive(attribute, element);
+                            JToken value = GetValueForJTokenRecursively(attribute, element);
                             if (value.ToString() == "" && attribute.IsRequired)
                             {
                                 return jToken;
@@ -151,13 +153,13 @@ namespace PortiaJsonOriented.Core
             return jToken;
         }
 
-        public static bool IsUrlLegal(Uri url, Uri rootUrl, IList<Uri> legalUrlsQueue, List<string> disallowedStrings)
+        public static bool IsUrlLegal(Uri url, Uri rootUrl, IList<Uri> currentQueue, List<string> disallowedStrings)
         {
             bool isUrlFromSameDomainAsRootUrl = url.OriginalString.Contains(rootUrl.OriginalString);
-            bool doesUrlAlreadyExistInLegalUrls = legalUrlsQueue.Contains(url);
+            bool doesUrlAlreadyExistInQueue = currentQueue.Contains(url);
             bool doesUrlContainAnyDisallowedStrings = Helper.ContainsAnyWords(url, disallowedStrings);
             if (isUrlFromSameDomainAsRootUrl == false ||
-                 doesUrlAlreadyExistInLegalUrls == true ||
+                 doesUrlAlreadyExistInQueue == true ||
                  doesUrlContainAnyDisallowedStrings == true)
             {
                 return false;
@@ -166,106 +168,5 @@ namespace PortiaJsonOriented.Core
         }
     }
 
-    public class PuppeteerWrapper
-    {
-        private Browser browser;
 
-        private async Task<PuppeteerWrapper> InitializeAsync()
-        {
-            await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultRevision);
-            KillPuppeteerIfRunning();
-            var args = new string[] {
-                "--no-sandbox",
-                "--disable-plugins", "--disable-sync", "--disable-gpu", "--disable-speech-api",
-                "--disable-remote-fonts", "--disable-shared-workers", "--disable-webgl", "--no-experiments",
-                "--no-first-run", "--no-default-browser-check", "--no-wifi", "--no-pings", "--no-service-autorun",
-                "--disable-databases", "--disable-default-apps", "--disable-demo-mode", "--disable-notifications",
-                "--disable-permissions-api", "--disable-background-networking", "--disable-3d-apis",
-                "--disable-bundled-ppapi-flash"
-            };
-            var launchOptions = new LaunchOptions { Headless = false, Args = args, IgnoreHTTPSErrors = true };
-            browser = await Puppeteer.LaunchAsync(launchOptions);
-            return this;
-        }
-
-        public static Task<PuppeteerWrapper> CreateAsync()
-        {
-            var ret = new PuppeteerWrapper();
-            return ret.InitializeAsync();
-        }
-
-        public async Task<HtmlContent> GetHtmlContentAsync(Uri url)
-        {
-            string html;
-            using (Page page = await browser.NewPageAsync())
-            {
-                await page.SetRequestInterceptionAsync(true);
-                page.Request += async (sender, e) =>
-                {
-                    try
-                    {
-                        switch (e.Request.ResourceType)
-                        {
-                            case ResourceType.Media:
-                            case ResourceType.StyleSheet:
-                            case ResourceType.Image:
-                            case ResourceType.Unknown:
-                            case ResourceType.Font:
-                            case ResourceType.TextTrack:
-                            case ResourceType.Xhr:
-                            case ResourceType.Fetch:
-                            case ResourceType.EventSource:
-                            case ResourceType.WebSocket:
-                            case ResourceType.Manifest:
-                            case ResourceType.Ping:
-                            case ResourceType.Other:
-                                await e.Request.AbortAsync();
-                                break;
-                            case ResourceType.Document:
-                            case ResourceType.Script:
-                            default:
-                                await e.Request.ContinueAsync();
-                                break;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Error => {ex.Message}");
-                        await e.Request.ContinueAsync();
-                    }
-                };
-                await page.GoToAsync(url.ToString());
-                html = await page.GetContentAsync();
-            }
-            return new HtmlContent(url, html);
-        }
-        private void KillPuppeteerIfRunning()
-        {
-            var puppeteerExecutablePath = new BrowserFetcher().GetExecutablePath(BrowserFetcher.DefaultRevision).Replace(@"\", @"\\");
-            List<int> processIdsToKill = new List<int>();
-            string wmiQueryString = @"SELECT ProcessId, ExecutablePath FROM Win32_Process WHERE ExecutablePath LIKE '" + puppeteerExecutablePath + "'";
-            using (var searcher = new ManagementObjectSearcher(wmiQueryString))
-            {
-                using (var results = searcher.Get())
-                {
-                    foreach (var item in results)
-                    {
-                        if (item != null)
-                        {
-                            var processId = Convert.ToInt32(item["ProcessId"]);
-                            processIdsToKill.Add(processId);
-                        }
-                    }
-                }
-            }
-            List<Process> processesToKill = Process.GetProcesses().Where(p => processIdsToKill.Where(x => x == p.Id).Any()).ToList();
-            if (processesToKill.Count > 0)// Is running
-            {
-                processesToKill.ForEach((x) =>
-                {
-                    x.Kill();
-                });
-            }
-        }
-    }
 }
