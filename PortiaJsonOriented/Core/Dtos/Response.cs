@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace PortiaJsonOriented.Core.Dtos
 {
-    public class Response
+    public class PortiaResponse
     {
         public string ProjectName { get; set; }
         public Uri StartUrl { get; set; }

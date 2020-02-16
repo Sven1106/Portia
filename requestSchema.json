@@ -5,7 +5,7 @@
   "required": [
     "projectName",
     "startUrl",
-    "disallowedStrings",
+    "isFixedListOfUrls",
     "tasks"
   ],
   "properties": {
@@ -17,12 +17,8 @@
       "type": "string",
       "pattern": "^(.*)$"
     },
-    "disallowedStrings": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "pattern": "^(.*)$"
-      }
+    "isFixedListOfUrls": {
+      "type": "boolean"
     },
     "tasks": {
       "type": "array",

@@ -33,7 +33,7 @@ namespace PortiaJsonOriented
 
             #endregion
         }
-        public async Task<Core.Dtos.Response> StartCrawlerAsync(Core.Dtos.Request request)
+        public async Task<Core.Dtos.PortiaResponse> StartCrawlerAsync(Core.Dtos.PortiaRequest request)
         {
             await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultRevision);
             Uri rootUri = request.StartUrl;
@@ -113,7 +113,7 @@ namespace PortiaJsonOriented
                 }
                 Console.Write("\rUrls in queue: {0} - Urls visited: {1} - Items successfully crawled: {2}", queue.Count, crawledUrlsCount, itemSuccessfullyCrawledCount);
             }
-            Core.Dtos.Response response = new Core.Dtos.Response
+            Core.Dtos.PortiaResponse response = new Core.Dtos.PortiaResponse
             {
                 ProjectName = request.ProjectName,
                 StartUrl = request.StartUrl,
@@ -232,7 +232,7 @@ namespace PortiaJsonOriented
             }
             return false;
         }
-        private static bool ContainsAnyRootItems(string html, Core.Dtos.Request request)
+        private static bool ContainsAnyRootItems(string html, Core.Dtos.PortiaRequest request)
         {
             HtmlDocument htmlDoc = new HtmlDocument();
             htmlDoc.LoadHtml(html);

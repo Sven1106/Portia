@@ -1,0 +1,58 @@
+{
+  "projectName": "Valdemarsro",
+  "startUrl": "https://www.valdemarsro.dk/cosmopolitan/",
+  "isFixedListOfUrls": false,
+  "tasks": [
+    {
+      "taskName": "allRecipes",
+      "items": [
+        {
+          "name": "recipe",
+          "type": "object",
+          "getMultipleFromPage": false,
+          "isRequired": true,
+          "xpath": "//*[@id='main']/div[1]",
+          "attributes": [
+            {
+              "name": "heading",
+              "type": "string",
+              "getMultipleFromPage": false,
+              "isRequired": true,
+              "xpath": "./div[2]/div/div[2]/h1"
+            },
+            {
+              "name": "ingredients",
+              "type": "string",
+              "getMultipleFromPage": true,
+              "isRequired": true,
+              "xpath": ".//*[@id='recipe-intro']/div[2]/div[4]/div[1]/ul/li[@itemprop='recipeIngredient']"
+            },
+            {
+              "name": "image",
+              "type": "object",
+              "getMultipleFromPage": false,
+              "isRequired": false,
+              "xpath": "./div[2]/div/div[4]/div[1]/img",
+              "attributes": [
+                {
+                  "name": "src",
+                  "type": "string",
+                  "getMultipleFromPage": false,
+                  "isRequired": false,
+                  "xpath": "./@src"
+                },
+                {
+                  "name": "alt",
+                  "type": "string",
+                  "getMultipleFromPage": false,
+                  "isRequired": false,
+                  "xpath": "./@alt"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

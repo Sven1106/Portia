@@ -1,7 +1,7 @@
 {
   "projectName": "Arla",
   "startUrl": "https://www.arla.dk/sitemap.xml?type=Modules.Recipes.Business.SitemapUrlWriter.RecipeSitemapUrlWriter",
-  "disallowedStrings": [ "/sog/?query" ],
+  "isFixedListOfUrls": true,
   "tasks": [
     {
       "taskName": "allRecipes",
@@ -24,7 +24,7 @@
               "name": "ingredients",
               "type": "string",
               "getMultipleFromPage": true,
-              "isRequired": false,
+              "isRequired": true,
               "xpath": "./div[2]/div[2]/div/div[2]/div/table/tbody/tr/th"
             },
             {

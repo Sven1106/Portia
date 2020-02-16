@@ -14,12 +14,11 @@ using PuppeteerSharp;
 using PortiaJsonOriented.Core.Models;
 using Task = System.Threading.Tasks.Task;
 using PortiaTask = PortiaJsonOriented.Core.Models.Task;
-using PortiaResponse = PortiaJsonOriented.Core.Dtos.Response;
-using PortiaRequest = PortiaJsonOriented.Core.Dtos.Request;
+using PortiaResponse = PortiaJsonOriented.Core.Dtos.PortiaResponse;
+using PortiaRequest = PortiaJsonOriented.Core.Dtos.PortiaRequest;
 using PortiaJsonOriented.Core;
 using System.Threading.Tasks.Dataflow;
-
-using System.Reactive.Disposables;
+using System.Net;
 
 namespace PortiaJsonOriented
 {
@@ -27,6 +26,7 @@ namespace PortiaJsonOriented
     {
         private static Uri startUrl;
         private static Uri hostUrl;
+        private static List<string> xpathsToWaitFor = new List<string>();
         private static List<PortiaTask> tasksFromRequest = new List<PortiaTask>();
         private static IList<string> disallowedStrings = new List<string>() { };
         private static ConcurrentDictionary<string, JArray> dataByTask = new ConcurrentDictionary<string, JArray>();
@@ -67,7 +67,7 @@ namespace PortiaJsonOriented
             urlsQueueLogger = new ActionBlock<Uri>(url => urlsQueued.TryAdd(url));
             urlsVisitedLogger = new ActionBlock<HtmlContent>(htmlContent => urlsVisited.TryAdd(htmlContent.Url));
 
-            htmlContentDownloader = new TransformBlock<Uri, HtmlContent>(async url => await puppeteerWrapper.GetHtmlContentAsync(url),
+            htmlContentDownloader = new TransformBlock<Uri, HtmlContent>(async url => await puppeteerWrapper.GetHtmlContentAsync(url, xpathsToWaitFor),
                 new ExecutionDataflowBlockOptions
                 {
                     BoundedCapacity = -1, // the size of the block input buffer. Handles memory ?
@@ -96,14 +96,17 @@ namespace PortiaJsonOriented
                 ConsoleColor color = ConsoleColor.Yellow;
                 Console.SetCursorPosition(0, 0);
                 WriteToConsole(color, format);
-                await Task.Delay(1000 / fps);
+                await Task.Delay((int)TimeSpan.FromSeconds(1).TotalMilliseconds / fps);
             }
         }
 
         public async Task<bool> MonitorCrawling()
         {
+            //TODO Remove urlsQueued & urlsVisited and find a way to get the count of values passed through broadcast
+            //Find a better way to monitor TPL
+
             int intervalToCheckInSeconds = 1;
-            int maxTimeoutCount = 5;
+            int maxTimeoutCount = 30;
             int currentTimeOutCount = 0;
             int urlsQueuedCount = 0;
             int currentUrlsVisitedCount = 0;
@@ -119,7 +122,6 @@ namespace PortiaJsonOriented
                 if (isTimedOut)
                 {
                     currentTimeOutCount++;
-                    //Console.WriteLine("Timeout in: {0}", intervalToCheckInSeconds * (maxTimeoutCount + 1) - intervalToCheckInSeconds * currentTimeOutCount);
                 }
                 else
                 {
@@ -133,10 +135,37 @@ namespace PortiaJsonOriented
 
                 urlsQueuedCount = urlsQueued.Count;
                 currentUrlsVisitedCount = urlsVisited.Count;
-                await Task.Delay(intervalToCheckInSeconds * 1000);
+                await Task.Delay((int)TimeSpan.FromSeconds(intervalToCheckInSeconds).TotalMilliseconds);
             }
-            bool succesfullyCrawled = urlsQueued.Count == urlsVisited.Count;
-            return succesfullyCrawled;
+            bool isSuccesfullyCrawled = urlsQueued.Count == urlsVisited.Count;
+            return isSuccesfullyCrawled;
+        }
+        public List<string> GetAllXpath(NodeAttribute node)
+        {
+            List<string> xpaths = new List<string>();
+            CreateAbsoluteXpaths(ref xpaths, node);
+            return xpaths;
+
+        }
+        public void CreateAbsoluteXpaths(ref List<string> xpaths, NodeAttribute node, string currentXpath = "")
+        {
+            string nodeXpath = node.Xpath;
+            if (currentXpath != "")
+            {
+                nodeXpath = nodeXpath.Replace("./", "/"); //removes relative prefix and prepares xpath for absolute path
+            }
+            currentXpath += nodeXpath;
+            if (node.Attributes == null)
+            {
+                xpaths.Add(currentXpath);
+            }
+            else
+            {
+                foreach (var attribute in node.Attributes)
+                {
+                    CreateAbsoluteXpaths(ref xpaths, attribute, currentXpath);
+                }
+            }
         }
 
         public async Task<PortiaResponse> StartCrawlerAsync(PortiaRequest request)
@@ -145,59 +174,67 @@ namespace PortiaJsonOriented
             hostUrl = new Uri(request.StartUrl.Scheme + Uri.SchemeDelimiter + request.StartUrl.Host);
             startUrl = request.StartUrl;
             tasksFromRequest = request.Tasks;
-            disallowedStrings = request.DisallowedStrings;
             //TODO Add /robots.txt handling eg. Sitemap, Disallow
+
 
             foreach (PortiaTask task in tasksFromRequest)
             {
                 dataByTask.TryAdd(task.TaskName, new JArray());
+
+                foreach (var item in task.Items)
+                {
+                    var xpaths = GetAllXpath(item);
+                    xpathsToWaitFor = xpaths; // TODO Has to handle xpaths foreach item
+                }
             }
 
             PuppeteerWrapper puppeteerWrapper = await PuppeteerWrapper.CreateAsync();
             CreateBlocks(puppeteerWrapper);
 
             #region unfinishedWork //TODO
-            //CrashDump crashDump = new CrashDump("GUID");
-            //var remainingWork = await crashDump.AnyCrashDump();
-            //if (remainingWork.Count() != 0)
-            //{
-            //    dataByTask = JsonConvert.DeserializeObject<ConcurrentDictionary<string, JArray>>(remainingWork[nameof(dataByTask)]);
+            CrashDump crashDump = new CrashDump(request.ProjectName);
+            var remainingWork = await crashDump.AnyCrashDump();
+            if (remainingWork.Count() != 0)
+            {
+                dataByTask = JsonConvert.DeserializeObject<ConcurrentDictionary<string, JArray>>(remainingWork[nameof(dataByTask)]);
 
-            //    List<Uri> _urlsQueued = JsonConvert.DeserializeObject<ICollection<Uri>>(remainingWork[nameof(urlsQueued)]).ToList();
-            //    _urlsQueued.ForEach(lu => urlsQueued.TryAdd(lu));
+                List<Uri> _urlsQueued = JsonConvert.DeserializeObject<ICollection<Uri>>(remainingWork[nameof(urlsQueued)]).ToList();
+                _urlsQueued.ForEach(lu => urlsQueued.TryAdd(lu));
 
-            //    List<Uri> _urlsVisited = JsonConvert.DeserializeObject<ICollection<Uri>>(remainingWork[nameof(urlsVisited)]).ToList();
-            //    _urlsVisited.ForEach(vu => urlsVisited.TryAdd(vu));
+                List<Uri> _urlsVisited = JsonConvert.DeserializeObject<ICollection<Uri>>(remainingWork[nameof(urlsVisited)]).ToList();
+                _urlsVisited.ForEach(vu => urlsVisited.TryAdd(vu));
 
-            //    List<Uri> _urlsRemaining = _urlsQueued.Except(_urlsVisited).ToList();
-            //    _urlsRemaining.ForEach(async (uu) => await htmlContentDownloader.SendAsync(uu));
-            //}
-            //else
-            //{
-            //}
+                List<Uri> _urlsRemaining = _urlsQueued.Except(_urlsVisited).ToList();
+                _urlsRemaining.ForEach(async (uu) => await htmlContentDownloader.SendAsync(uu));
+            }
+            else
+            {
+                await urlBroadcaster.SendAsync(startUrl);
+            }
             #endregion
 
-            await urlBroadcaster.SendAsync(startUrl);
 
+            List<Task<bool>> tasks = new List<Task<bool>>();
             Task render = RenderCrawling();
-            bool isFixedListOfUrls = true; //Add bool to Request.JSON
+            bool isFixedListOfUrls = request.IsFixedListOfUrls;
             if (isFixedListOfUrls)
             {
+                BufferBlock<Uri> filteredUrls = new BufferBlock<Uri>();
 
-                BufferBlock<Uri> parsedUrls = new BufferBlock<Uri>();
                 urlBroadcaster.LinkTo(urlsQueueLogger);
                 urlBroadcaster.LinkTo(htmlContentDownloader);
                 htmlContentDownloader.LinkTo(htmlContentBroadcaster);
                 htmlContentBroadcaster.LinkTo(urlsVisitedLogger);
                 htmlContentBroadcaster.LinkTo(urlParser);
                 urlParser.LinkTo(urlFilter);
-                urlFilter.LinkTo(parsedUrls);
+                urlFilter.LinkTo(filteredUrls);
 
                 Task<bool> monitorForUrlParsing = MonitorCrawling();
-                await Task.WhenAll(monitorForUrlParsing);
+                tasks.Add(monitorForUrlParsing);
+                await Task.WhenAll(tasks);
 
                 CreateBlocks(puppeteerWrapper);
-                parsedUrls.LinkTo(urlBroadcaster);
+                filteredUrls.LinkTo(urlBroadcaster);
                 urlBroadcaster.LinkTo(urlsQueueLogger);
                 urlBroadcaster.LinkTo(htmlContentDownloader);
                 htmlContentDownloader.LinkTo(htmlContentBroadcaster);
@@ -205,8 +242,7 @@ namespace PortiaJsonOriented
                 htmlContentBroadcaster.LinkTo(objParser);
 
                 Task<bool> monitorForObjParsing = MonitorCrawling();
-                await Task.WhenAll(monitorForObjParsing);
-
+                tasks.Add(monitorForObjParsing);
             }
             else
             {
@@ -220,27 +256,25 @@ namespace PortiaJsonOriented
                 urlFilter.LinkTo(urlBroadcaster);
 
                 Task<bool> monitor = MonitorCrawling();
-                await Task.WhenAll(monitor);
-                #region Logging //TODO
-                //bool successfullyCrawled = monitor.Result;
-                //if (successfullyCrawled)
-                //{
-
-                //}
-                //else
-                //{
-                //    Dictionary<string, string> jsonByVariableName = new Dictionary<string, string>();
-                //    jsonByVariableName.Add(nameof(urlsQueued), JsonConvert.SerializeObject(urlsQueued));
-                //    jsonByVariableName.Add(nameof(dataByTask), JsonConvert.SerializeObject(dataByTask));
-                //    jsonByVariableName.Add(nameof(urlsVisited), JsonConvert.SerializeObject(urlsVisited));
-                //    await crashDump.CreateDumpFiles(jsonByVariableName);
-                //}
-                #endregion
+                tasks.Add(monitor);
             }
 
-            Console.WriteLine("Press any key to exit.");
-            Console.ReadKey();
+            var results = (await Task.WhenAll(tasks)).ToList();
+            #region Logging //TODO
+            bool successfullyCrawled = results.All(x => x == true);
+            if (successfullyCrawled)
+            {
 
+            }
+            else
+            {
+                Dictionary<string, string> jsonByVariableName = new Dictionary<string, string>();
+                jsonByVariableName.Add(nameof(urlsQueued), JsonConvert.SerializeObject(urlsQueued));
+                jsonByVariableName.Add(nameof(dataByTask), JsonConvert.SerializeObject(dataByTask));
+                jsonByVariableName.Add(nameof(urlsVisited), JsonConvert.SerializeObject(urlsVisited));
+                await crashDump.CreateDumpFiles(jsonByVariableName);
+            }
+            #endregion
 
             PortiaResponse response = new PortiaResponse
             {
@@ -276,6 +310,7 @@ namespace PortiaJsonOriented
                     foreach (var aTag in aTags)
                     {
                         string hrefValue = aTag.Attributes["href"].Value;
+                        hrefValue = WebUtility.HtmlDecode(hrefValue);
                         Uri url = new Uri(hrefValue, UriKind.RelativeOrAbsolute);
                         url = new Uri(startUrl, url);
                         urlsFound.Add(url);
@@ -314,7 +349,7 @@ namespace PortiaJsonOriented
                 dataByTask[task.TaskName].Add(taskObject);
             }
         }
-        private JToken GetValueForJTokenRecursively(NodeAttribute node, HtmlNode htmlNode)
+        private JToken GetValueForJTokenRecursively(NodeAttribute node, HtmlNode htmlNode) // TODO: see if it is possible to use the same HTMLNode/Htmldocument through out the extractions.
         {
             JToken jToken = "";
             if (node.GetMultipleFromPage)
@@ -328,6 +363,10 @@ namespace PortiaJsonOriented
                         foreach (var element in elements)
                         {
                             HtmlNodeNavigator navigator = (HtmlNodeNavigator)element.CreateNavigator();
+                            if (navigator.Value.Trim() == "")
+                            {
+                                continue;
+                            }
                             jArray.Add(navigator.Value.Trim());
                         }
                         jToken = jArray;
@@ -365,6 +404,10 @@ namespace PortiaJsonOriented
                     // Get as Type
                     if (nodeFound != null)
                     {
+                        if (nodeFound.Value.Trim() == "")
+                        {
+                            return jToken;
+                        }
                         jToken = nodeFound.Value.Trim();
                     }
                 }

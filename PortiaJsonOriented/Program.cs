@@ -21,7 +21,7 @@ namespace PortiaJsonOriented
         static async Task Main(string[] args)
         {
             string solutionRootPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), @"..\..\..\"));
-            var json = File.ReadAllText(Path.Combine(solutionRootPath, "request.json"));
+            var json = File.ReadAllText(Path.Combine(solutionRootPath, "ValdemarsroRequest.json"));
 
             JSchemaValidatingReader jSchemaReader = new JSchemaValidatingReader(new JsonTextReader(new StringReader(json)));
             jSchemaReader.Schema = JSchema.Parse(File.ReadAllText(Path.Combine(solutionRootPath, "requestSchema.json")));
@@ -29,7 +29,7 @@ namespace PortiaJsonOriented
             IList<string> errorMessages = new List<string>();
             jSchemaReader.ValidationEventHandler += (o, a) => errorMessages.Add(a.Message);
             JsonSerializer serializer = new JsonSerializer();
-            Request request = serializer.Deserialize<Request>(jSchemaReader);
+            PortiaRequest request = serializer.Deserialize<PortiaRequest>(jSchemaReader);
             if (errorMessages.Count > 0)
             {
                 foreach (var eventMessage in errorMessages)
@@ -40,7 +40,7 @@ namespace PortiaJsonOriented
                 return;
             }
             WebcrawlerTpl webcrawler = new WebcrawlerTpl();
-            Response response = await webcrawler.StartCrawlerAsync(request);
+            PortiaResponse response = await webcrawler.StartCrawlerAsync(request);
             var settings = new JsonSerializerSettings()
             {
                 Formatting = Formatting.Indented,
@@ -49,7 +49,7 @@ namespace PortiaJsonOriented
                     NamingStrategy = new CamelCaseNamingStrategy()
                 }
             };
-            File.WriteAllText("response.json", JsonConvert.SerializeObject(response, settings));
+            File.WriteAllText(response.ProjectName + ".json", JsonConvert.SerializeObject(response, settings));
         }
     }
 
