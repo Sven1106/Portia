@@ -33,22 +33,22 @@
       "type": "object",
       "required": [
         "taskName",
-        "items"
+        "nodes"
       ],
       "properties": {
         "taskName": {
           "type": "string"
         },
-        "items": {
+        "nodes": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/itemsNode"
+            "$ref": "#/definitions/node"
           },
           "minItems": 1
         }
       }
     },
-    "itemsNode": {
+    "node": {
       "type": "object",
       "required": [
         "name",
@@ -82,7 +82,7 @@
         "attributes": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/itemsNode"
+            "$ref": "#/definitions/node"
           },
           "minItems": 1
         }

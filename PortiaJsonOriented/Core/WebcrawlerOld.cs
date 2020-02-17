@@ -87,7 +87,7 @@ namespace PortiaJsonOriented
                     {
 
                         JObject taskObject = new JObject();
-                        foreach (NodeAttribute item in task.Items)
+                        foreach (NodeAttribute item in task.Nodes)
                         {
                             JToken value = GetValueForJTokenRecursive(item, documentNode);
                             if (value.ToString() == "")
@@ -117,7 +117,7 @@ namespace PortiaJsonOriented
             {
                 ProjectName = request.ProjectName,
                 StartUrl = request.StartUrl,
-                Task = tasks
+                Tasks = tasks
             };
             return response;
         }
@@ -239,7 +239,7 @@ namespace PortiaJsonOriented
             HtmlNode documentNode = htmlDoc.DocumentNode;
             foreach (var datum in request.Tasks)
             {
-                foreach (var item in datum.Items)
+                foreach (var item in datum.Nodes)
                 {
                     if (documentNode.SelectSingleNode(item.Xpath) != null)
                     {

@@ -5,7 +5,7 @@
   "tasks": [
     {
       "taskName": "allRecipes",
-      "items": [
+      "nodes": [
         {
           "name": "recipe",
           "type": "object",

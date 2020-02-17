@@ -9,6 +9,6 @@ namespace PortiaJsonOriented.Core.Models
     public class Task
     {
         public string TaskName { get; set; }
-        public List<NodeAttribute> Items { get; set; }
+        public List<NodeAttribute> Nodes { get; set; }
     }
 }

@@ -81,7 +81,6 @@ namespace PortiaJsonOriented
             urlParser = new TransformManyBlock<HtmlContent, Uri>(htmlContent => GetAllAbsoluteUrlsFromHtml(htmlContent.Html));
             urlFilter = CreateUrlFilterBlock<Uri>();
         }
-
         public async Task RenderCrawling(int fps = 30)
         {
             while (true)
@@ -99,7 +98,6 @@ namespace PortiaJsonOriented
                 await Task.Delay((int)TimeSpan.FromSeconds(1).TotalMilliseconds / fps);
             }
         }
-
         public async Task<bool> MonitorCrawling()
         {
             //TODO Remove urlsQueued & urlsVisited and find a way to get the count of values passed through broadcast
@@ -140,33 +138,7 @@ namespace PortiaJsonOriented
             bool isSuccesfullyCrawled = urlsQueued.Count == urlsVisited.Count;
             return isSuccesfullyCrawled;
         }
-        public List<string> GetAllXpath(NodeAttribute node)
-        {
-            List<string> xpaths = new List<string>();
-            CreateAbsoluteXpaths(ref xpaths, node);
-            return xpaths;
 
-        }
-        public void CreateAbsoluteXpaths(ref List<string> xpaths, NodeAttribute node, string currentXpath = "")
-        {
-            string nodeXpath = node.Xpath;
-            if (currentXpath != "")
-            {
-                nodeXpath = nodeXpath.Replace("./", "/"); //removes relative prefix and prepares xpath for absolute path
-            }
-            currentXpath += nodeXpath;
-            if (node.Attributes == null)
-            {
-                xpaths.Add(currentXpath);
-            }
-            else
-            {
-                foreach (var attribute in node.Attributes)
-                {
-                    CreateAbsoluteXpaths(ref xpaths, attribute, currentXpath);
-                }
-            }
-        }
 
         public async Task<PortiaResponse> StartCrawlerAsync(PortiaRequest request)
         {
@@ -181,7 +153,7 @@ namespace PortiaJsonOriented
             {
                 dataByTask.TryAdd(task.TaskName, new JArray());
 
-                foreach (var item in task.Items)
+                foreach (var item in task.Nodes)
                 {
                     var xpaths = GetAllXpath(item);
                     xpathsToWaitFor = xpaths; // TODO Has to handle xpaths foreach item
@@ -280,9 +252,66 @@ namespace PortiaJsonOriented
             {
                 ProjectName = request.ProjectName,
                 StartUrl = request.StartUrl,
-                Task = dataByTask
+                Tasks = dataByTask
             };
             return response;
+        }
+        private void ParseObjects(HtmlContent htmlContent, List<PortiaTask> tasks)
+        {
+            HtmlDocument htmlDoc = new HtmlDocument();
+            htmlDoc.LoadHtml(htmlContent.Html);
+            HtmlNode documentNode = htmlDoc.DocumentNode;
+            foreach (PortiaTask task in tasks)
+            {
+                JObject taskObject = new JObject();
+                foreach (NodeAttribute item in task.Nodes)
+                {
+                    JToken value = GetValueForJTokenRecursively(item, documentNode);
+                    if (value.ToString() == "")
+                    {
+                        continue;
+                    }
+                    taskObject.Add(item.Name, value);
+                    Metadata metadata = new Metadata(htmlContent.Url.ToString(), DateTime.UtcNow);
+                    taskObject.Add("metadata", JObject.FromObject(metadata, new JsonSerializer()
+                    {
+                        ContractResolver = new CamelCasePropertyNamesContractResolver()
+                    }));
+
+                }
+                if (taskObject.HasValues == false)
+                {
+                    continue;
+                }
+                dataByTask[task.TaskName].Add(taskObject); //TODO Reference dataByTask instead of static variable
+            }
+        }
+        private List<string> GetAllXpath(NodeAttribute node)
+        {
+            List<string> xpaths = new List<string>();
+            CreateAbsoluteXpaths(ref xpaths, node);
+            return xpaths;
+
+        }
+        private void CreateAbsoluteXpaths(ref List<string> xpaths, NodeAttribute node, string currentXpath = "")
+        {
+            string nodeXpath = node.Xpath;
+            if (currentXpath != "")
+            {
+                nodeXpath = nodeXpath.Replace("./", "/"); //removes relative prefix and prepares xpath for absolute path
+            }
+            currentXpath += nodeXpath;
+            if (node.Attributes == null)
+            {
+                xpaths.Add(currentXpath);
+            }
+            else
+            {
+                foreach (var attribute in node.Attributes)
+                {
+                    CreateAbsoluteXpaths(ref xpaths, attribute, currentXpath);
+                }
+            }
         }
         private List<Uri> GetAllAbsoluteUrlsFromHtml(string html)
         {
@@ -318,36 +347,6 @@ namespace PortiaJsonOriented
                 }
             }
             return urlsFound;
-        }
-        private void ParseObjects(HtmlContent htmlContent, List<PortiaTask> tasks)
-        {
-            HtmlDocument htmlDoc = new HtmlDocument();
-            htmlDoc.LoadHtml(htmlContent.Html);
-            HtmlNode documentNode = htmlDoc.DocumentNode;
-            foreach (PortiaTask task in tasks)
-            {
-                JObject taskObject = new JObject();
-                foreach (NodeAttribute item in task.Items)
-                {
-                    JToken value = GetValueForJTokenRecursively(item, documentNode);
-                    if (value.ToString() == "")
-                    {
-                        continue;
-                    }
-                    taskObject.Add(item.Name, value);
-                    Metadata metadata = new Metadata(htmlContent.Url.ToString(), DateTime.UtcNow);
-                    taskObject.Add("metadata", JObject.FromObject(metadata, new JsonSerializer()
-                    {
-                        ContractResolver = new CamelCasePropertyNamesContractResolver()
-                    }));
-
-                }
-                if (taskObject.HasValues == false)
-                {
-                    continue;
-                }
-                dataByTask[task.TaskName].Add(taskObject);
-            }
         }
         private JToken GetValueForJTokenRecursively(NodeAttribute node, HtmlNode htmlNode) // TODO: see if it is possible to use the same HTMLNode/Htmldocument through out the extractions.
         {
