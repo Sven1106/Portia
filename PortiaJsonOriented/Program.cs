@@ -21,7 +21,7 @@ namespace PortiaJsonOriented
         static async Task Main(string[] args)
         {
             string solutionRootPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), @"..\..\..\"));
-            var json = File.ReadAllText(Path.Combine(solutionRootPath, "ValdemarsroRequest.json"));
+            var json = File.ReadAllText(Path.Combine(solutionRootPath, "ArlaRequest.json"));
 
             JSchemaValidatingReader jSchemaReader = new JSchemaValidatingReader(new JsonTextReader(new StringReader(json)));
             jSchemaReader.Schema = JSchema.Parse(File.ReadAllText(Path.Combine(solutionRootPath, "requestSchema.json")));

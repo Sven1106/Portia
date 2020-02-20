@@ -50,7 +50,7 @@ namespace PortiaJsonOriented.Core
                 "--disable-3d-apis",
                 "--disable-bundled-ppapi-flash"
             };
-            var launchOptions = new LaunchOptions { Headless = true, Args = args, IgnoreHTTPSErrors = true };
+            var launchOptions = new LaunchOptions { Headless = false, Args = args, IgnoreHTTPSErrors = true };
             browser = await Puppeteer.LaunchAsync(launchOptions);
             return this;
         }

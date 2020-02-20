@@ -9,7 +9,7 @@ namespace PortiaJsonOriented.Core.Dtos
     public class PortiaResponse
     {
         public string ProjectName { get; set; }
-        public Uri StartUrl { get; set; }
+        public Uri Domain { get; set; }
         public dynamic Tasks { get; set; }
     }
 }

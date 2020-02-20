@@ -24,8 +24,7 @@ namespace PortiaJsonOriented
 {
     public class WebcrawlerTpl
     {
-        private static Uri startUrl;
-        private static Uri hostUrl;
+        private static Uri domain;
         private static List<string> xpathsToWaitFor = new List<string>();
         private static List<PortiaTask> tasksFromRequest = new List<PortiaTask>();
         private static IList<string> disallowedStrings = new List<string>() { };
@@ -48,7 +47,7 @@ namespace PortiaJsonOriented
             var hs = new HashSet<System.Uri>();
             return new TransformManyBlock<System.Uri, System.Uri>(url =>
             {
-                bool isUrlFromSameDomainAsRootUrl = url.OriginalString.Contains(hostUrl.OriginalString);
+                bool isUrlFromSameDomainAsRootUrl = url.OriginalString.Contains(domain.OriginalString);
                 bool doesUrlContainAnyDisallowedStrings = Helper.ContainsAnyWords(url, disallowedStrings);
                 if (isUrlFromSameDomainAsRootUrl == false ||
                      doesUrlContainAnyDisallowedStrings == true)
@@ -143,12 +142,11 @@ namespace PortiaJsonOriented
         public async Task<PortiaResponse> StartCrawlerAsync(PortiaRequest request)
         {
             Console.WriteLine("Starting");
-            hostUrl = new Uri(request.StartUrl.Scheme + Uri.SchemeDelimiter + request.StartUrl.Host);
-            startUrl = request.StartUrl;
+            domain = request.Domain;
+
+
             tasksFromRequest = request.Tasks;
             //TODO Add /robots.txt handling eg. Sitemap, Disallow
-
-
             foreach (PortiaTask task in tasksFromRequest)
             {
                 dataByTask.TryAdd(task.TaskName, new JArray());
@@ -162,9 +160,11 @@ namespace PortiaJsonOriented
 
             PuppeteerWrapper puppeteerWrapper = await PuppeteerWrapper.CreateAsync();
             CreateBlocks(puppeteerWrapper);
+            Task render = RenderCrawling();
+            List<Task<bool>> tasks = new List<Task<bool>>();
 
-            #region unfinishedWork //TODO
             CrashDump crashDump = new CrashDump(request.ProjectName);
+            #region unfinishedWork //TODO
             var remainingWork = await crashDump.AnyCrashDump();
             if (remainingWork.Count() != 0)
             {
@@ -181,13 +181,14 @@ namespace PortiaJsonOriented
             }
             else
             {
-                await urlBroadcaster.SendAsync(startUrl);
+                foreach (var startUrl in request.StartUrls)
+                {
+                    await urlsQueueLogger.SendAsync(startUrl);
+                    await htmlContentDownloader.SendAsync(startUrl);
+                }
+                #endregion
             }
-            #endregion
 
-
-            List<Task<bool>> tasks = new List<Task<bool>>();
-            Task render = RenderCrawling();
             bool isFixedListOfUrls = request.IsFixedListOfUrls;
             if (isFixedListOfUrls)
             {
@@ -251,7 +252,7 @@ namespace PortiaJsonOriented
             PortiaResponse response = new PortiaResponse
             {
                 ProjectName = request.ProjectName,
-                StartUrl = request.StartUrl,
+                Domain = request.Domain,
                 Tasks = dataByTask
             };
             return response;
@@ -341,7 +342,7 @@ namespace PortiaJsonOriented
                         string hrefValue = aTag.Attributes["href"].Value;
                         hrefValue = WebUtility.HtmlDecode(hrefValue);
                         Uri url = new Uri(hrefValue, UriKind.RelativeOrAbsolute);
-                        url = new Uri(startUrl, url);
+                        url = new Uri(domain, url);
                         urlsFound.Add(url);
                     }
                 }

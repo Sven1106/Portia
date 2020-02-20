@@ -36,7 +36,7 @@ namespace PortiaJsonOriented
         public async Task<Core.Dtos.PortiaResponse> StartCrawlerAsync(Core.Dtos.PortiaRequest request)
         {
             await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultRevision);
-            Uri rootUri = request.StartUrl;
+            Uri rootUri = request.StartUrls.FirstOrDefault();
             ConcurrentQueue<Uri> queue = new ConcurrentQueue<Uri>();
             IList<Uri> visitedUrls = new List<Uri>();
             IList<string> blackListedWords = new List<string>() { };
@@ -116,7 +116,7 @@ namespace PortiaJsonOriented
             Core.Dtos.PortiaResponse response = new Core.Dtos.PortiaResponse
             {
                 ProjectName = request.ProjectName,
-                StartUrl = request.StartUrl,
+                Domain = request.Domain,
                 Tasks = tasks
             };
             return response;

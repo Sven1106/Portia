@@ -4,7 +4,8 @@
   "type": "object",
   "required": [
     "projectName",
-    "startUrl",
+    "domain",
+    "startUrls",
     "isFixedListOfUrls",
     "tasks"
   ],
@@ -13,9 +14,16 @@
       "type": "string",
       "pattern": "^(.*)$"
     },
-    "startUrl": {
+    "domain": {
       "type": "string",
       "pattern": "^(.*)$"
+    },
+    "startUrls": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(.*)$"
+      }
     },
     "isFixedListOfUrls": {
       "type": "boolean"
