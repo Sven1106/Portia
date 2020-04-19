@@ -26,7 +26,7 @@ namespace PortiaJsonOriented
         private static Uri domain;
         private static Dictionary<string, JArray> dataByTaskName = new Dictionary<string, JArray>();
         private static BlockingCollection<Uri> urlsQueued = new BlockingCollection<Uri>();
-
+        private PuppeteerWrapper puppeteerWrapper;
 
         public async Task<PortiaResponse> StartCrawlerAsync(PortiaRequest request)
         {
@@ -41,25 +41,24 @@ namespace PortiaJsonOriented
                 task.Nodes.ForEach(TaskNode => xpathsToWaitFor.AddRange(GetAllXpath(TaskNode))); // Creates the list of xpathsToWaitFor.
             });
             #endregion
-            request.StartUrls.ForEach(url => urlsQueued.Add(url));
-            PuppeteerWrapper puppeteerWrapper = await PuppeteerWrapper.CreateAsync();
-            Task puppeteerTask = Task.Run(async() =>
-            {
-                int urlCount = 0;
-                while (!urlsQueued.IsCompleted)
-                {
-                    for (int i = 0; i < 3; i++)
-                    {
-                        var bla = urlsQueued.Take();
-                        Console.WriteLine(bla.ToString());
-                        await puppeteerWrapper.GetHtmlContentAsync(bla);
-                    }
-                    Console.WriteLine(urlsQueued.IsCompleted);
-                }
-                Console.WriteLine("Adding was completed!");
-
+            request.StartUrls.ForEach((url) => {
+                urlsQueued.Add(url);
             });
-            Task.WaitAll(puppeteerTask);
+            puppeteerWrapper = await PuppeteerWrapper.CreateAsync();
+
+            var runningTasks = new List<Task<Uri>>();
+            runningTasks.Add(ProcessUrl(request.StartUrls.FirstOrDefault()));
+            while (runningTasks.Any())
+            {
+                var firstCompletedTask = await Task.WhenAny(runningTasks);
+                runningTasks.Remove(firstCompletedTask);
+                var urlsFound = await firstCompletedTask;
+                Console.WriteLine(urlsFound);
+
+                //await puppeteerWrapper.GetHtmlContentAsync(bla);
+                //Console.WriteLine(urlsQueued.IsCompleted);
+            }
+            Console.WriteLine("Adding was completed!");
             bool isFixedListOfUrls = request.IsFixedListOfUrls;
 
             PortiaResponse response = new PortiaResponse
@@ -70,6 +69,13 @@ namespace PortiaJsonOriented
             };
             return response;
         }
+
+        private async Task<Uri> ProcessUrl(Uri url)
+        {
+            await puppeteerWrapper.GetHtmlContentAsync(url);
+            return url;
+        }
+
         private void ParseObjects(HtmlContent htmlContent, List<PortiaTask> tasks)
         {
             HtmlDocument htmlDoc = new HtmlDocument();

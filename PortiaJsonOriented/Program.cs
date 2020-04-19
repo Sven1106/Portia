@@ -39,7 +39,7 @@ namespace PortiaJsonOriented
                 Console.ReadKey();
                 return;
             }
-            WebcrawlerTpl webcrawler = new WebcrawlerTpl();
+            WebcrawlerSimple webcrawler = new WebcrawlerSimple();
             PortiaResponse response = await webcrawler.StartCrawlerAsync(request);
             var settings = new JsonSerializerSettings()
             {
