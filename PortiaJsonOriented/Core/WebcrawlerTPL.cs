@@ -56,7 +56,7 @@ namespace PortiaJsonOriented
                 }
 
                 return Enumerable.Repeat(url, hs.Add(url) ? 1 : 0);
-            });
+            }); 
         }
         public void CreateBlocks(PuppeteerWrapper puppeteerWrapper)
         {
@@ -66,7 +66,7 @@ namespace PortiaJsonOriented
             urlsQueueLogger = new ActionBlock<Uri>(url => urlsQueued.TryAdd(url));
             urlsVisitedLogger = new ActionBlock<HtmlContent>(htmlContent => urlsVisited.TryAdd(htmlContent.Url));
 
-            htmlContentDownloader = new TransformBlock<Uri, HtmlContent>(async url => await puppeteerWrapper.GetHtmlContentAsync(url, xpathsToWaitFor),
+            htmlContentDownloader = new TransformBlock<Uri, HtmlContent>(async url => await puppeteerWrapper.GetHtmlContentAsync(url),
                 new ExecutionDataflowBlockOptions
                 {
                     BoundedCapacity = -1, // the size of the block input buffer. Handles memory ?
@@ -355,7 +355,7 @@ namespace PortiaJsonOriented
             if (node.GetMultipleFromPage)
             {
                 JArray jArray = new JArray();
-                if (node.Type.ToLower() == "string" || node.Type.ToLower() == "number" || node.Type.ToLower() == "boolean") // basic types
+                if (node.Type == NodeType.String || node.Type == NodeType.Number || node.Type == NodeType.Boolean) // basic types
                 {
                     HtmlNodeCollection elements = htmlNode.SelectNodes(node.Xpath);
                     if (elements != null)
@@ -372,7 +372,7 @@ namespace PortiaJsonOriented
                         jToken = jArray;
                     }
                 }
-                else if (node.Type.ToLower() == "object" && node.Attributes.Count > 0) // complex types
+                else if (node.Type == NodeType.Object && node.Attributes.Count > 0) // complex types
                 {
                     JObject jObject = new JObject();
                     HtmlNodeCollection elements = htmlNode.SelectNodes(node.Xpath);
@@ -398,7 +398,7 @@ namespace PortiaJsonOriented
             else
             {
                 HtmlNodeNavigator navigator = (HtmlNodeNavigator)htmlNode.CreateNavigator();
-                if (node.Type.ToLower() == "string" || node.Type.ToLower() == "number" || node.Type.ToLower() == "boolean") // basic types
+                if (node.Type == NodeType.String || node.Type == NodeType.Number || node.Type == NodeType.Boolean) // basic types
                 {
                     XPathNavigator nodeFound = navigator.SelectSingleNode(node.Xpath);
                     // Get as Type
@@ -411,7 +411,7 @@ namespace PortiaJsonOriented
                         jToken = nodeFound.Value.Trim();
                     }
                 }
-                else if (node.Type.ToLower() == "object" && node.Attributes.Count > 0) // complex types
+                else if (node.Type == NodeType.Object && node.Attributes.Count > 0) // complex types
                 {
                     HtmlNode element = htmlNode.SelectSingleNode(node.Xpath);
                     if (element != null)

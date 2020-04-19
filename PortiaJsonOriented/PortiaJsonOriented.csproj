@@ -67,8 +67,10 @@
     <Compile Include="Core\Dtos\Response.cs" />
     <Compile Include="Core\Models\Task.cs" />
     <Compile Include="Core\Models\HtmlContent.cs" />
+    <Compile Include="Core\Models\NodeType.cs" />
     <Compile Include="Core\PuppeteerWrapper.cs" />
     <Compile Include="Core\WebcrawlerOld.cs" />
+    <Compile Include="Core\WebcrawlerSimple.cs" />
     <Compile Include="Core\WebcrawlerTPL.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

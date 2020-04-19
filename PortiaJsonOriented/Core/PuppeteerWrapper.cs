@@ -14,9 +14,10 @@ namespace PortiaJsonOriented.Core
     public class PuppeteerWrapper
     {
         private Browser browser;
+        private static ViewPortOptions _viewPortOptions;
+        private static List<string> _xpathsToWaitFor;
         public PuppeteerWrapper()
         {
-
         }
         ~PuppeteerWrapper()
         {
@@ -54,18 +55,25 @@ namespace PortiaJsonOriented.Core
             browser = await Puppeteer.LaunchAsync(launchOptions);
             return this;
         }
+
         public static Task<PuppeteerWrapper> CreateAsync()
         {
+            return CreateAsync(new List<string>());
+        }
+        public static Task<PuppeteerWrapper> CreateAsync(List<string> xpathsToWaitFor, int width = 1920, int height = 1080)
+        {
+            _xpathsToWaitFor = xpathsToWaitFor;
+            _viewPortOptions = new ViewPortOptions() { Width = width, Height = height };
             PuppeteerWrapper ret = new PuppeteerWrapper();
             return ret.InitializeAsync();
         }
-        public async Task<HtmlContent> GetHtmlContentAsync(Uri url, List<string> xpathsToWaitFor)
+        public async Task<HtmlContent> GetHtmlContentAsync(Uri url)
         {
-            string html;
+            string html = "";
             using (Page page = await browser.NewPageAsync())
             {
-                await page.SetViewportAsync(new ViewPortOptions() { Width = 1920, Height = 1080 });
-                await page.SetRequestInterceptionAsync(true); //Intercepting the page seems to finish it prematurely
+                await page.SetViewportAsync(_viewPortOptions);
+                await page.SetRequestInterceptionAsync(true); // Intercepting the page seems to finish it prematurely
                 page.Request += async (sender, e) =>
                 {
                     try
@@ -101,39 +109,38 @@ namespace PortiaJsonOriented.Core
                     }
                 };
                 await page.GoToAsync(url.ToString(), WaitUntilNavigation.Networkidle0);
-                if (xpathsToWaitFor != null)
+
+                int oldHeight = 0;
+                foreach (var xpath in _xpathsToWaitFor)
                 {
-                    int oldHeight = 0;
-                    foreach (var xpath in xpathsToWaitFor)
+                    bool xpathSelectorAddedToDOM = false;
+                    int timeoutCount = 0;
+                    while (timeoutCount <= 3 && xpathSelectorAddedToDOM == false)
                     {
-                        bool xpathSelectorAddedToDOM = false;
-                        int timeoutCount = 0;
-                        while (timeoutCount <= 3 && xpathSelectorAddedToDOM == false)
+                        try
                         {
-                            try
-                            {
-                                await page.WaitForXPathAsync(xpath, new WaitForSelectorOptions { Timeout = 500 });
-                                xpathSelectorAddedToDOM = true;
-                            }
-                            catch (Exception)
-                            {
-                                int newHeight = (int)await page.EvaluateExpressionAsync("document.body.scrollHeight");
-                                if (oldHeight != newHeight)
-                                {
-                                    await page.EvaluateExpressionAsync("window.scrollBy({top:" + newHeight + ",behavior:'smooth'})");
-                                    oldHeight = newHeight;
-                                    timeoutCount++;
-                                }
-                                else
-                                {
-                                    break;
-                                }
-
-                            }
+                            await page.WaitForXPathAsync(xpath, new WaitForSelectorOptions { Timeout = 500 });
+                            xpathSelectorAddedToDOM = true;
                         }
+                        catch (Exception ex)
+                        {
+                            int newHeight = (int)await page.EvaluateExpressionAsync("document.body.scrollHeight");
+                            if (oldHeight != newHeight)
+                            {
+                                await page.EvaluateExpressionAsync("window.scrollBy({top:" + newHeight + ",behavior:'smooth'})");
+                                oldHeight = newHeight;
+                                timeoutCount++;
+                            }
+                            else
+                            {
+                                break;
+                            }
 
+                        }
                     }
+
                 }
+
 
                 html = await page.GetContentAsync();
             }
