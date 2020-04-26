@@ -8,15 +8,12 @@ using System.Threading.Tasks;
 
 namespace PuppeteerSharpForPortia
 {
-    public class PuppeteerWrapper : IDisposable
+    public class PuppeteerWrapper : IAsyncDisposable
     {
         public Browser browser;
         public ViewPortOptions viewPortOptions;
         public List<string> xpathsToWaitFor;
         public LaunchOptions launchOptions;
-        public PuppeteerWrapper()
-        {
-        }
         private async Task<PuppeteerWrapper> InitializeAsync()
         {
             await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultRevision);
@@ -171,9 +168,14 @@ namespace PuppeteerSharpForPortia
             }
         }
 
-        public void Dispose()
+        //public void Dispose()
+        //{
+        //    browser.Dispose();
+        //}
+
+        public ValueTask DisposeAsync()
         {
-            browser.Dispose();
+            return browser.DisposeAsync();
         }
     }
 }

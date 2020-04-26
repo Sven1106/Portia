@@ -104,6 +104,7 @@ namespace ExampleAPI
         public async Task StartAsync()
         {
             PuppeteerWrapper = await PuppeteerWrapper.CreateAsync(xpathsToWaitFor);
+
             await PuppeteerWrapper.GetHtmlContentAsync(new Uri("https://www.arla.dk/"));
 
             //if (PuppeteerWrapper == null)
@@ -124,8 +125,7 @@ namespace ExampleAPI
         }
         public async Task StopAsync()
         {
-            await Task.Delay(2000);
-            PuppeteerWrapper.Dispose();
+            await PuppeteerWrapper.DisposeAsync();
         }
 
 

@@ -31,7 +31,7 @@
 
 
             var connection = new signalR.HubConnectionBuilder()
-                .withUrl('https://localhost:44374/chathub')
+                .withUrl('http://localhost:50677/chathub')
                 .configureLogging(signalR.LogLevel.Information)
                 .withAutomaticReconnect()
                 .build();
