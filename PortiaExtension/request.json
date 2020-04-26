@@ -4,7 +4,7 @@
   "projectName": "Arla",
   "data": [
     {
-      "taskName": "AllRecipies",
+      "jobName": "AllRecipies",
       "items": [
         {
           "name": "recipe",

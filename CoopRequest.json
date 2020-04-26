@@ -2,9 +2,9 @@
   "projectName": "Coop",
   "startUrl": "https://opskrifter.coop.dk/sitemap",
   "isFixedListOfUrls": true,
-  "tasks": [
+  "jobs": [
     {
-      "taskName": "allRecipes",
+      "name": "allRecipes",
       "nodes": [
         {
           "name": "recipe",

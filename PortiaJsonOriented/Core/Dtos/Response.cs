@@ -4,12 +4,12 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PortiaJsonOriented.Core.Dtos
+namespace PortiaJsonOriented.Core.DTO
 {
     public class PortiaResponse
     {
         public string ProjectName { get; set; }
         public Uri Domain { get; set; }
-        public dynamic Tasks { get; set; }
+        public dynamic Jobs { get; set; }
     }
 }

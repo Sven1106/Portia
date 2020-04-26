@@ -4,7 +4,7 @@ using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Schema;
 using Newtonsoft.Json.Serialization;
 using PortiaJsonOriented.Core;
-using PortiaJsonOriented.Core.Dtos;
+using PortiaJsonOriented.Core.DTO;
 using System;
 using System.Collections;
 using System.Collections.Concurrent;
@@ -21,7 +21,7 @@ namespace PortiaJsonOriented
         static async Task Main(string[] args)
         {
             string solutionRootPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), @"..\..\..\"));
-            var json = File.ReadAllText(Path.Combine(solutionRootPath, "ArlaRequest.json"));
+            var json = File.ReadAllText(Path.Combine(solutionRootPath, "ValdemarsroRequest.json"));
 
             JSchemaValidatingReader jSchemaReader = new JSchemaValidatingReader(new JsonTextReader(new StringReader(json)));
             jSchemaReader.Schema = JSchema.Parse(File.ReadAllText(Path.Combine(solutionRootPath, "requestSchema.json")));
@@ -40,7 +40,7 @@ namespace PortiaJsonOriented
                 return;
             }
             WebcrawlerSimple webcrawler = new WebcrawlerSimple();
-            PortiaResponse response = await webcrawler.StartCrawlerAsync(request);
+            PortiaResponse response = await webcrawler.StartAsync(request);
             var settings = new JsonSerializerSettings()
             {
                 Formatting = Formatting.Indented,

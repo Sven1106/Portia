@@ -1,31 +1,24 @@
-﻿using Newtonsoft.Json.Linq;
-using PortiaJsonOriented.Core.Models;
-using PuppeteerSharp;
+﻿using PuppeteerSharp;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Management;
-using System.Text;
 using System.Threading.Tasks;
 
-namespace PortiaJsonOriented.Core
+namespace PuppeteerSharpForPortia
 {
-    public class PuppeteerWrapper
+    public class PuppeteerWrapper : IDisposable
     {
-        private Browser browser;
-        private static ViewPortOptions _viewPortOptions;
-        private static List<string> _xpathsToWaitFor;
+        public Browser browser;
+        public ViewPortOptions viewPortOptions;
+        public List<string> xpathsToWaitFor;
+        public LaunchOptions launchOptions;
         public PuppeteerWrapper()
         {
         }
-        ~PuppeteerWrapper()
-        {
-            browser.Dispose();
-        }
         private async Task<PuppeteerWrapper> InitializeAsync()
         {
-            KillPuppeteerIfRunning();
             await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultRevision);
             var args = new string[] {
                 "--no-sandbox",
@@ -51,20 +44,23 @@ namespace PortiaJsonOriented.Core
                 "--disable-3d-apis",
                 "--disable-bundled-ppapi-flash"
             };
-            var launchOptions = new LaunchOptions { Headless = false, Args = args, IgnoreHTTPSErrors = true };
-            browser = await Puppeteer.LaunchAsync(launchOptions);
+            launchOptions = new LaunchOptions { Headless = false, Args = args, IgnoreHTTPSErrors = true };
             return this;
         }
-
+        public async Task LaunchAsync() {
+            browser = await Puppeteer.LaunchAsync(launchOptions);
+        }
         public static Task<PuppeteerWrapper> CreateAsync()
         {
             return CreateAsync(new List<string>());
         }
         public static Task<PuppeteerWrapper> CreateAsync(List<string> xpathsToWaitFor, int width = 1920, int height = 1080)
         {
-            _xpathsToWaitFor = xpathsToWaitFor;
-            _viewPortOptions = new ViewPortOptions() { Width = width, Height = height };
-            PuppeteerWrapper ret = new PuppeteerWrapper();
+            PuppeteerWrapper ret = new PuppeteerWrapper
+            {
+                xpathsToWaitFor = xpathsToWaitFor,
+                viewPortOptions = new ViewPortOptions() { Width = width, Height = height }
+            };
             return ret.InitializeAsync();
         }
         public async Task<HtmlContent> GetHtmlContentAsync(Uri url)
@@ -72,7 +68,7 @@ namespace PortiaJsonOriented.Core
             string html = "";
             using (Page page = await browser.NewPageAsync())
             {
-                await page.SetViewportAsync(_viewPortOptions);
+                await page.SetViewportAsync(viewPortOptions);
                 await page.SetRequestInterceptionAsync(true); // Intercepting the page seems to finish it prematurely
                 page.Request += async (sender, e) =>
                 {
@@ -111,7 +107,7 @@ namespace PortiaJsonOriented.Core
                 await page.GoToAsync(url.ToString(), WaitUntilNavigation.Networkidle0);
 
                 int oldHeight = 0;
-                foreach (var xpath in _xpathsToWaitFor)
+                foreach (var xpath in xpathsToWaitFor)
                 {
                     bool xpathSelectorAddedToDOM = false;
                     int timeoutCount = 0;
@@ -146,7 +142,7 @@ namespace PortiaJsonOriented.Core
             }
             return new HtmlContent(url, html);
         }
-        private void KillPuppeteerIfRunning()
+        private void KillPuppeteerIfRunning() //Win32 only
         {
             var puppeteerExecutablePath = new BrowserFetcher().GetExecutablePath(BrowserFetcher.DefaultRevision).Replace(@"\", @"\\");
             List<int> processIdsToKill = new List<int>();
@@ -173,6 +169,11 @@ namespace PortiaJsonOriented.Core
                     x.Kill();
                 });
             }
+        }
+
+        public void Dispose()
+        {
+            browser.Dispose();
         }
     }
 }

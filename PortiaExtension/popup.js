@@ -2,9 +2,9 @@ let form = document.getElementById("root");
 form.addEventListener("submit", function (e) {
     e.preventDefault();
 })
-let createTaskButton = document.getElementById("taskCreateButton");
-createTaskButton.addEventListener("click", function () {
-    createTask('root.tasks', this)
+let createJobButton = document.getElementById("jobCreateButton");
+createJobButton.addEventListener("click", function () {
+    createJob('root.jobs', this)
 }
 );
 
@@ -16,39 +16,37 @@ function createContainer(classes = "") {
     return container;
 }
 
-function createTask(ulElementId) {
+function createJob(ulElementId) {
 
     let ulElement = document.getElementById(ulElementId);
     let lastLiElement = ulElement.lastElementChild;
-    let liElementId = createNewLiElementId(lastLiElement, ulElementId);
-    let itemUlElementId = createElementId(liElementId, "items");
+    let newLiElementId = createNewLiElementId(lastLiElement, ulElementId);
+    let itemUlElementId = createElementId(newLiElementId, "items");
 
-    let taskNameContainer = createContainer("control has-icons-left is-expanded"); document.createElement("div");
-
-    let taskNameInput = createInput(
-        createElementId(liElementId, "taskName"),
+    let jobNameInputId = createElementId(newLiElementId, "jobName");
+    let jobNameInput = createInput(
+        jobNameInputId,
         "text",
-        "input is-small");
-    taskNameContainer.appendChild(taskNameInput);
+        "input is-small",
+        ""
+    );
+    let jobNameInputContainer = createContainer("control has-icons-left is-expanded");
+    jobNameInputContainer.appendChild(jobNameInput);
+    let jobNameInputIconContainer = createContainer("icon is-small is-left");
+    jobNameInputContainer.appendChild(jobNameInputIconContainer);
 
-    let taskNameIconContainer = createContainer("icon is-small is-left");
-    let taskNameIcon = document.createElement("i");
-    taskNameIcon.setAttribute("class", "fas fa-cogs");
-    taskNameIconContainer.appendChild(taskNameIcon);
-    taskNameContainer.appendChild(taskNameIconContainer);
 
-
-    let deleteButton = createDeleteButton(liElementId);
+    let deleteButton = createDeleteButton(newLiElementId);
     let deleteButtonContainer = createContainer("control");
     deleteButtonContainer.appendChild(deleteButton);
 
-    let taskContainer = createContainer("field is-grouped");
-    taskContainer.appendChild(taskNameContainer);
-    taskContainer.appendChild(deleteButtonContainer);
+    let jobContainer = createContainer("field is-grouped");
+    jobContainer.appendChild(jobNameInputContainer);
+    jobContainer.appendChild(deleteButtonContainer);
 
-    let newLiElement = createLiElementWithId(liElementId);
+    let newLiElement = createLiElementWithId(newLiElementId);
     let htmlElements = [];
-    htmlElements.push(taskContainer);
+    htmlElements.push(jobContainer);
 
     let ulContainer = document.createElement("div");
     let brLabelButtonElements = createLabelButton(itemUlElementId, "Items");
@@ -57,7 +55,8 @@ function createTask(ulElementId) {
 
     newLiElement.appendChildren(htmlElements);
     ulElement.appendChild(newLiElement);
-    //console.log(document.getElementById("root"));
+    setIconOfInput(jobNameInputId, "fa-cogs");
+    setPlaceholderOfInput(jobNameInputId, "allShoes");
 }
 
 function createItemInUl(ulElementId) {
@@ -102,15 +101,19 @@ function createItemInUl(ulElementId) {
             switch (this.value) {
                 case "string":
                     setIconOfInput(nameInputId, "fa-font");
+                    setPlaceholderOfInput(nameInputId, "productName");
                     break;
                 case "number":
                     setIconOfInput(nameInputId, "fa-sort-numeric-down");
+                    setPlaceholderOfInput(nameInputId, "productPrice");
                     break;
                 case "boolean":
                     setIconOfInput(nameInputId, "fa-check-square");
+                    setPlaceholderOfInput(nameInputId, "productInStock");
                     break;
                 case "object":
                     setIconOfInput(nameInputId, "fa-cubes");
+                    setPlaceholderOfInput(nameInputId, "product");
                     break;
                 default:
                     break;
@@ -129,15 +132,15 @@ function createItemInUl(ulElementId) {
     getMultipleFromPageInputLabel.prepend(getMultipleFromPageInput);
     getMultipleFromPageInputContainer.appendChild(getMultipleFromPageInputLabel);
 
-    let isRequired = createInput(
+    let isRequiredInput = createInput(
         createElementId(newLiElementId, "isRequired"),
         "checkbox",
         "checkbox is-small"
     );
-    let isRequiredContainer = createContainer("control");
+    let isRequiredInputContainer = createContainer("control");
     let isRequiredLabel = createLabel("Required", "", "label is-small");
-    isRequiredLabel.prepend(isRequired);
-    isRequiredContainer.appendChild(isRequiredLabel);
+    isRequiredLabel.prepend(isRequiredInput);
+    isRequiredInputContainer.appendChild(isRequiredLabel);
 
 
     let row1Container = createContainer("field is-grouped");
@@ -146,7 +149,7 @@ function createItemInUl(ulElementId) {
     let row2Container = createContainer("field is-grouped");
     row2Container.append(selectContainer,
         getMultipleFromPageInputContainer,
-        isRequiredContainer);
+        isRequiredInputContainer);
 
     let xpathInput = createInput(
         createElementId(newLiElementId, "xpath"),
@@ -162,8 +165,10 @@ function createItemInUl(ulElementId) {
     newLiElement.append(row1Container, row2Container, row3Container);
     ulElement.appendChild(newLiElement);
     setIconOfInput(nameInputId, "fa-font");
+    select.dispatchEvent(new Event('change'));
+
 }
-function setIconOfInput(inputId, icon) {
+function setIconOfInput(inputId, icon ) {
     let inputElement = document.getElementById(inputId);
     let parentElement = inputElement.parentElement;
     let iconContainer = parentElement.getElementsByClassName("icon")[0];
@@ -171,6 +176,10 @@ function setIconOfInput(inputId, icon) {
     let inputIcon = document.createElement("i");
     inputIcon.setAttribute("class", "fas " + icon);
     iconContainer.append(inputIcon);
+}
+function setPlaceholderOfInput(inputId, placeholder) {
+    let inputElement = document.getElementById(inputId);
+    inputElement.setAttribute("placeholder", placeholder);
 }
 function deleteElementById(id) {
     let element = document.getElementById(id);
@@ -258,7 +267,7 @@ Node.prototype.removeChildren = function (htmlElements) {
     });
 }
 
-function createInput(id, type, classes = "", value = "") {
+function createInput(id, type, classes = "", value = "", placeholder = "") {
     let inputField = document.createElement("input");
     inputField.setAttribute("id", id);
     inputField.setAttribute("type", type);
@@ -267,6 +276,9 @@ function createInput(id, type, classes = "", value = "") {
     }
     if (value != "") {
         inputField.setAttribute("value", value);
+    }
+    if (placeholder != "") {
+        inputField.setAttribute("placeholder", placeholder);
     }
     return inputField;
 }

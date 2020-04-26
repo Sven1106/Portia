@@ -1,10 +1,13 @@
 {
   "projectName": "Valdemarsro",
-  "startUrl": "https://www.valdemarsro.dk/cosmopolitan/",
-  "isFixedListOfUrls": false,
-  "tasks": [
+  "domain": "https://www.valdemarsro.dk/",
+  "startUrls": [
+    "https://www.valdemarsro.dk/aftensmad/"
+  ],
+  "isFixedListOfUrls": true,
+  "jobs": [
     {
-      "taskName": "allRecipes",
+      "name": "allRecipes",
       "nodes": [
         {
           "name": "recipe",
