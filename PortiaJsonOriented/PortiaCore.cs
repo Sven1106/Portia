@@ -2,111 +2,34 @@
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
+using PortiaJsonOriented.DTO;
+using PortiaJsonOriented.Models;
+using PuppeteerSharpForPortia;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Text;
 using System.Threading.Tasks;
 using System.Xml.XPath;
-using PuppeteerSharp;
-using PortiaJsonOriented.Core;
-using PortiaJsonOriented.Core.Models;
-using PortiaJsonOriented.Core.DTO;
-using System.Net;
-using PuppeteerSharpForPortia;
 
 namespace PortiaJsonOriented
 {
-    public class WebcrawlerSimple
+    public class PortiaCore
     {
-        private ConcurrentDictionary<string, JArray> dataByJobName = new ConcurrentDictionary<string, JArray>();
-        private BlockingCollection<Uri> currentQueuedUrls = new BlockingCollection<Uri>();
-        private BlockingCollection<Uri> logOfAllVisitedUrls = new BlockingCollection<Uri>();
-        private BlockingCollection<Uri> logOfAllQueuedUrls = new BlockingCollection<Uri>();
-        private BlockingCollection<Uri> urlsToFixedList = new BlockingCollection<Uri>();
-        private IList<string> disallowedStrings = new List<string>() { };
-        private PuppeteerWrapper puppeteerWrapper;
-        private readonly int maxConcurrentDownload = 3;
-        private PortiaRequest portiaRequest;
+        public ConcurrentDictionary<string, JArray> dataByJobName = new ConcurrentDictionary<string, JArray>();
+        public BlockingCollection<Uri> urlsToFixedList = new BlockingCollection<Uri>();
+        public BlockingCollection<Uri> currentQueuedUrls = new BlockingCollection<Uri>();
+        public BlockingCollection<Uri> logOfAllVisitedUrls = new BlockingCollection<Uri>();
+        public BlockingCollection<Uri> logOfAllQueuedUrls = new BlockingCollection<Uri>();
+        public IList<string> disallowedStrings = new List<string>() { };
+        public PortiaRequest portiaRequest = new PortiaRequest();
+        public PuppeteerWrapper puppeteerWrapper = null;
 
-        public async Task<PortiaResponse> StartAsync(PortiaRequest request)
-        {
-            Console.WriteLine("Starting");
-            portiaRequest = request;
-            // TODO Add /robots.txt handling eg. Sitemap, Disallow
-            #region preparation
-            List<string> xpathsToWaitFor = new List<string>();
-            portiaRequest.Jobs.ForEach((job) =>
-            {
-                dataByJobName.TryAdd(job.Name, new JArray());// Initialize a new Key-value Pair for each Job.
-                job.Nodes.ForEach(jobNode => xpathsToWaitFor.AddRange(GetAllXpath(jobNode))); // Creates the list of xpathsToWaitFor.
-            });
-            // TODO create SignalR connection and return it to client.
-            #endregion
-            puppeteerWrapper = await PuppeteerWrapper.CreateAsync();
-            Task render = RenderCrawling();
 
-            var runningTasks = new List<Task>();
-            bool isFixedListOfUrls = portiaRequest.IsFixedListOfUrls;
-            if (isFixedListOfUrls)
-            {
-                FilterAndAddUrls(portiaRequest.StartUrls, ref urlsToFixedList);
-                while (urlsToFixedList.Any() || runningTasks.Any())
-                {
-                    while (urlsToFixedList.Any() && runningTasks.Count < maxConcurrentDownload)
-                    {
-                        if (urlsToFixedList.TryTake(out Uri uri))
-                        {
-                            runningTasks.Add(ParseUrlsAndObjectsFromUrl(uri));
-                        }
-                    }
-                    var firstCompletedTask = await Task.WhenAny(runningTasks);
-                    runningTasks.Remove(firstCompletedTask);
-                }
-                while (currentQueuedUrls.Any() || runningTasks.Any())
-                {
-                    while (currentQueuedUrls.Any() && runningTasks.Count < maxConcurrentDownload)
-                    {
-                        if (currentQueuedUrls.TryTake(out Uri uri))
-                        {
-                            runningTasks.Add(ParseObjectsFromUrl(uri));
-                        }
-                    }
-                    var firstCompletedTask = await Task.WhenAny(runningTasks);
-                    runningTasks.Remove(firstCompletedTask);
-                }
-            }
-            else
-            {
-
-                FilterAndAddUrls(portiaRequest.StartUrls, ref currentQueuedUrls);
-                while (currentQueuedUrls.Any() || runningTasks.Any())
-                {
-                    while (currentQueuedUrls.Any() && runningTasks.Count < maxConcurrentDownload)
-                    {
-                        if (currentQueuedUrls.TryTake(out Uri uri))
-                        {
-                            runningTasks.Add(ParseUrlsAndObjectsFromUrl(uri));
-                        }
-                    }
-                    var firstCompletedTask = await Task.WhenAny(runningTasks);
-                    runningTasks.Remove(firstCompletedTask);
-                }
-            }
-            Console.WriteLine("Adding was completed!");
-            Console.ReadKey();
-            PortiaResponse response = new PortiaResponse
-            {
-                ProjectName = request.ProjectName,
-                Domain = request.Domain,
-                Jobs = dataByJobName
-            };
-            return response;
-        }
-
-        private async Task ParseUrlsAndObjectsFromUrl(Uri url)
+        public async Task ParseUrlsAndObjectsFromUrl(Uri url)
         {
             var htmlContent = await puppeteerWrapper.GetHtmlContentAsync(url);
             logOfAllVisitedUrls.TryAdd(url);
@@ -114,28 +37,35 @@ namespace PortiaJsonOriented
             var parsedUrls = GetAllAbsoluteUrlsFromHtml(htmlContent.Html);
             FilterAndAddUrls(parsedUrls, ref currentQueuedUrls);
         }
-        private async Task ParseObjectsFromUrl(Uri url)
+        public async Task ParseObjectsFromUrl(Uri url)
         {
             var htmlContent = await puppeteerWrapper.GetHtmlContentAsync(url);
             logOfAllVisitedUrls.TryAdd(url);
             ParseObjectsFromHtmlBasedOnJob(htmlContent);
         }
 
-        private void FilterAndAddUrls(List<Uri> parsedUrls, ref BlockingCollection<Uri> targetQueue)
+        public void FilterAndAddUrls(List<Uri> urls, ref BlockingCollection<Uri> targetQueue)
         {
-            foreach (var parsedUrl in parsedUrls)
+            foreach (Uri url in urls)
             {
-                bool isUrlFromSameDomainAsRootUrl = parsedUrl.OriginalString.Contains(portiaRequest.Domain.OriginalString);
-                bool doesUrlContainAnyDisallowedStrings = Helper.ContainsAnyWords(parsedUrl, disallowedStrings);
+                bool isUrlFromSameDomainAsRootUrl = url.OriginalString.Contains(portiaRequest.Domain.OriginalString);
+                bool doesUrlContainAnyDisallowedStrings = ContainsAnyWords(url, disallowedStrings);
                 if (isUrlFromSameDomainAsRootUrl == false ||
                     doesUrlContainAnyDisallowedStrings == true ||
-                    logOfAllQueuedUrls.Contains(parsedUrl) == true)
+                    logOfAllQueuedUrls.Contains(url) == true)
                 {
                     continue;
                 }
-                logOfAllQueuedUrls.TryAdd(parsedUrl);
-                targetQueue.TryAdd(parsedUrl);
+                logOfAllQueuedUrls.TryAdd(url);
+                targetQueue.TryAdd(url);
             }
+
+        }
+        public List<string> GetAllXpath(NodeAttribute node)
+        {
+            List<string> xpaths = new List<string>();
+            CreateAbsoluteXpathsRecursivelyOnRequiredNodes(ref xpaths, node);
+            return xpaths;
 
         }
 
@@ -166,17 +96,11 @@ namespace PortiaJsonOriented
                 {
                     continue;
                 }
+                KeyValuePair<string, JObject> keyValuePair = new KeyValuePair<string, JObject>(job.Name, jobObject);
                 dataByJobName[job.Name].Add(jobObject); //TODO Reference dataByJobName instead of static variable
             }
         }
-        private List<string> GetAllXpath(NodeAttribute node)
-        {
-            List<string> xpaths = new List<string>();
-            CreateAbsoluteXpathsRecursively(ref xpaths, node);
-            return xpaths;
-
-        }
-        private void CreateAbsoluteXpathsRecursively(ref List<string> xpaths, NodeAttribute node, string currentXpath = "")
+        private void CreateAbsoluteXpathsRecursivelyOnRequiredNodes(ref List<string> xpaths, NodeAttribute node, string currentXpath = "")
         {
             string nodeXpath = node.Xpath;
             if (currentXpath != "")
@@ -190,9 +114,9 @@ namespace PortiaJsonOriented
             }
             else
             {
-                foreach (var attribute in node.Attributes)
+                foreach (var attribute in node.Attributes.Where(x => x.IsRequired == true))
                 {
-                    CreateAbsoluteXpathsRecursively(ref xpaths, attribute, currentXpath);
+                    CreateAbsoluteXpathsRecursivelyOnRequiredNodes(ref xpaths, attribute, currentXpath);
                 }
             }
         }
@@ -314,27 +238,16 @@ namespace PortiaJsonOriented
             }
             return jToken;
         }
-
-        private async Task RenderCrawling(int fps = 30)
+        private static bool ContainsAnyWords(Uri url, IList<string> words)
         {
-            while (true)
+            foreach (var word in words)
             {
-                string format = $"\ncurrent urls in queue              = {currentQueuedUrls.Count}    " +
-                                $"\nurls visited                       = {logOfAllVisitedUrls.Count}    " +
-                                $"\nlog of all queued urls             = {logOfAllQueuedUrls.Count}    " +
-                                $"\n" +
-                                $"\nobjects parsed for:";
-                foreach (var item in dataByJobName)
+                if (url.ToString().Contains(word))
                 {
-                    format +=   $"\n    '{item.Key}' = {item.Value.Count}    ";
+                    return true;
                 }
-                ConsoleColor color = ConsoleColor.Yellow;
-                Console.SetCursorPosition(0, 0);
-                Console.ForegroundColor = color;
-                Console.WriteLine(format);
-                Console.ResetColor();
-                await Task.Delay((int)TimeSpan.FromSeconds(1).TotalMilliseconds / fps);
             }
+            return false;
         }
     }
 }

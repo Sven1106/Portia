@@ -6,7 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PortiaJsonOriented.Core
+namespace PortiaJsonOriented
 {
     public class CrashDump
     {
@@ -30,7 +30,7 @@ namespace PortiaJsonOriented.Core
             Directory.CreateDirectory(folderPath);
             foreach (var jsonString in jsonByVariableName)
             {
-                await Helper.WriteAsync(Path.Combine(folderPath, jsonString.Key + ".json"), jsonString.Value);
+                await WriteAsync(Path.Combine(folderPath, jsonString.Key + ".json"), jsonString.Value);
             }
         }
         private async Task<Dictionary<string, string>> GetJsonByDumpName()
@@ -42,13 +42,34 @@ namespace PortiaJsonOriented.Core
             {
                 FileInfo fileinfo = new FileInfo(fullfileName);
                 string variableName = fileinfo.Name.Replace(fileinfo.Extension, "");
-                var fileStream = await Helper.ReadAsync(fullfileName);
+                var fileStream = await ReadAsync(fullfileName);
                 string json = Encoding.UTF8.GetString(fileStream, 0, fileStream.Length);
                 jsonByDumpName.Add(variableName, json);
                 //fileinfo.Delete();
             }
             //Directory.Delete(folderPath);
             return jsonByDumpName;
+        }
+
+        private static async Task WriteAsync(string location, string data)
+        {
+            var buffer = Encoding.UTF8.GetBytes(data);
+
+            using (var fs = new FileStream(location, FileMode.OpenOrCreate,
+                FileAccess.Write, FileShare.None, buffer.Length, true))
+            {
+                await fs.WriteAsync(buffer, 0, buffer.Length);
+            }
+        }
+        private static async Task<byte[]> ReadAsync(string filename)
+        {
+            byte[] result;
+            using (FileStream SourceStream = File.Open(filename, FileMode.Open))
+            {
+                result = new byte[SourceStream.Length];
+                await SourceStream.ReadAsync(result, 0, (int)SourceStream.Length);
+            }
+            return result;
         }
     }
 }

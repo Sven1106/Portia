@@ -2,7 +2,7 @@
 //using Newtonsoft.Json;
 //using Newtonsoft.Json.Linq;
 //using Newtonsoft.Json.Serialization;
-//using PortiaJsonOriented.Core.Models;
+//using PortiaJsonOriented.Models;
 //using PuppeteerSharp;
 //using System;
 //using System.Collections.Concurrent;
@@ -12,7 +12,7 @@
 //using System.Net.Http;
 //using System.Threading.Tasks;
 //using System.Xml.XPath;
-//using PortiaTask = PortiaJsonOriented.Core.Models.Job;
+//using PortiaTask = PortiaJsonOriented.Models.Job;
 
 //namespace PortiaJsonOriented
 //{

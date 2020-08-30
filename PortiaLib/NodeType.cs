@@ -1,4 +1,4 @@
-﻿namespace PortiaJsonOriented.Core.Models
+﻿namespace PortiaLib
 {
     public enum NodeType
     {
@@ -6,6 +6,5 @@
         Number,
         Boolean,
         Object
-
     }
 }

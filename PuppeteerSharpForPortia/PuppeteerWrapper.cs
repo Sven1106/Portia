@@ -1,4 +1,5 @@
 ﻿using PuppeteerSharp;
+using PuppeteerSharp.Input;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -10,10 +11,12 @@ namespace PuppeteerSharpForPortia
 {
     public class PuppeteerWrapper : IAsyncDisposable
     {
-        public Browser browser;
+        public Browser browser = null;
         public ViewPortOptions viewPortOptions;
         public List<string> xpathsToWaitFor;
+        public string xpathForLoadMoreButton;
         public LaunchOptions launchOptions;
+        public int timeout = 30000;
         private async Task<PuppeteerWrapper> InitializeAsync()
         {
             await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultRevision);
@@ -41,21 +44,22 @@ namespace PuppeteerSharpForPortia
                 "--disable-3d-apis",
                 "--disable-bundled-ppapi-flash"
             };
-            launchOptions = new LaunchOptions { Headless = false, Args = args, IgnoreHTTPSErrors = true };
+            launchOptions = new LaunchOptions { Headless = true, Args = args, IgnoreHTTPSErrors = true };
+            KillPuppeteerIfRunning();
+            await LaunchAsync();
             return this;
         }
-        public async Task LaunchAsync() {
+        private async Task LaunchAsync()
+        {
             browser = await Puppeteer.LaunchAsync(launchOptions);
         }
-        public static Task<PuppeteerWrapper> CreateAsync()
-        {
-            return CreateAsync(new List<string>());
-        }
-        public static Task<PuppeteerWrapper> CreateAsync(List<string> xpathsToWaitFor, int width = 1920, int height = 1080)
+
+        public static Task<PuppeteerWrapper> CreateAsync(List<string> xpathsToWaitFor, string xpathForLoadMoreButton, int width = 1920, int height = 1080)
         {
             PuppeteerWrapper ret = new PuppeteerWrapper
             {
                 xpathsToWaitFor = xpathsToWaitFor,
+                xpathForLoadMoreButton = xpathForLoadMoreButton,
                 viewPortOptions = new ViewPortOptions() { Width = width, Height = height }
             };
             return ret.InitializeAsync();
@@ -86,10 +90,10 @@ namespace PuppeteerSharpForPortia
                             case ResourceType.WebSocket:
                                 await e.Request.AbortAsync();
                                 break;
-                            case ResourceType.Document:
                             case ResourceType.StyleSheet:
-                            case ResourceType.Script:
                             case ResourceType.Xhr:
+                            case ResourceType.Script:
+                            case ResourceType.Document:
                             default:
                                 await e.Request.ContinueAsync();
                                 break;
@@ -103,42 +107,65 @@ namespace PuppeteerSharpForPortia
                 };
                 await page.GoToAsync(url.ToString(), WaitUntilNavigation.Networkidle0);
 
-                int oldHeight = 0;
+
+                bool loadMoreVisible = await IsElementVisible(page, xpathForLoadMoreButton);
+                while (loadMoreVisible)
+                {
+                    try
+                    {
+                        var element = await page.WaitForXPathAsync(xpathForLoadMoreButton,
+                            new WaitForSelectorOptions { Visible = true, Timeout = 30000 }
+                        );
+                        await element.ClickAsync(new ClickOptions() {Delay = 1000 });
+                    }
+                    catch (PuppeteerException ex) when (ex is WaitTaskTimeoutException)
+                    {
+                        loadMoreVisible = false;
+                    }
+                }
+
                 foreach (var xpath in xpathsToWaitFor)
                 {
-                    bool xpathSelectorAddedToDOM = false;
-                    int timeoutCount = 0;
-                    while (timeoutCount <= 3 && xpathSelectorAddedToDOM == false)
+                    bool elementVisible = false;
+                    elementVisible = await IsElementVisible(page, xpath);
+                    if (elementVisible == false) // to break out of the loop as soon as possible when not found.
                     {
-                        try
-                        {
-                            await page.WaitForXPathAsync(xpath, new WaitForSelectorOptions { Timeout = 500 });
-                            xpathSelectorAddedToDOM = true;
-                        }
-                        catch (Exception ex)
-                        {
-                            int newHeight = (int)await page.EvaluateExpressionAsync("document.body.scrollHeight");
-                            if (oldHeight != newHeight)
-                            {
-                                await page.EvaluateExpressionAsync("window.scrollBy({top:" + newHeight + ",behavior:'smooth'})");
-                                oldHeight = newHeight;
-                                timeoutCount++;
-                            }
-                            else
-                            {
-                                break;
-                            }
-
-                        }
+                        break;
                     }
 
                 }
-
 
                 html = await page.GetContentAsync();
             }
             return new HtmlContent(url, html);
         }
+
+        private async Task<bool> IsElementVisible(Page page, string xpath)
+        {
+            int tries = 0;
+            int oldHeight = (int)await page.EvaluateExpressionAsync("document.body.scrollHeight");
+            while (tries <= 3)
+            {
+                try
+                {
+                    tries++;
+                    await page.WaitForXPathAsync(xpath, new WaitForSelectorOptions { Visible = true, Timeout = 2500 });
+                    return true;
+                }
+                catch (Exception)
+                {
+                    int newHeight = (int)await page.EvaluateExpressionAsync("document.body.scrollHeight");
+                    await page.EvaluateExpressionAsync("window.scrollBy({top:" + newHeight + ",behavior:'smooth'})"); // To trigger autoload of new content.
+                    if (oldHeight == newHeight)
+                    {
+                        break;
+                    }
+                    oldHeight = newHeight;
+                }
+            }
+            return false;
+        }
+
         private void KillPuppeteerIfRunning() //Win32 only
         {
             var puppeteerExecutablePath = new BrowserFetcher().GetExecutablePath(BrowserFetcher.DefaultRevision).Replace(@"\", @"\\");
@@ -168,14 +195,9 @@ namespace PuppeteerSharpForPortia
             }
         }
 
-        //public void Dispose()
-        //{
-        //    browser.Dispose();
-        //}
-
         public ValueTask DisposeAsync()
         {
-            return browser.DisposeAsync();
+            return ((IAsyncDisposable)browser).DisposeAsync();
         }
     }
 }

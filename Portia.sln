@@ -11,7 +11,13 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ExampleApp", "ExampleApp\Ex
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ExampleAPI", "ExampleAPI\ExampleAPI.csproj", "{A3420944-ACAA-4C63-B849-B79FF38BBF46}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PuppeteerSharpForPortia", "PuppeteerSharpForPortia\PuppeteerSharpForPortia.csproj", "{051B103F-5FBC-4FEE-BE24-D298E5EE70BE}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PuppeteerSharpForPortia", "PuppeteerSharpForPortia\PuppeteerSharpForPortia.csproj", "{051B103F-5FBC-4FEE-BE24-D298E5EE70BE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PortiaLib", "PortiaLib\PortiaLib.csproj", "{0A677FB6-23BD-45C3-82E0-191E4D561663}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AkkaWebcrawler", "AkkaWebcrawler\AkkaWebcrawler.csproj", "{D5C770E6-6522-41F2-A503-62EA5B1891B2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AkkaWebcrawler.Common", "AkkaWebcrawler.Common\AkkaWebcrawler.Common.csproj", "{C8DABD0F-C07B-4DCF-9297-91320FC50EC2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -39,6 +45,18 @@ Global
 		{051B103F-5FBC-4FEE-BE24-D298E5EE70BE}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{051B103F-5FBC-4FEE-BE24-D298E5EE70BE}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{051B103F-5FBC-4FEE-BE24-D298E5EE70BE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0A677FB6-23BD-45C3-82E0-191E4D561663}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0A677FB6-23BD-45C3-82E0-191E4D561663}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0A677FB6-23BD-45C3-82E0-191E4D561663}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0A677FB6-23BD-45C3-82E0-191E4D561663}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D5C770E6-6522-41F2-A503-62EA5B1891B2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D5C770E6-6522-41F2-A503-62EA5B1891B2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D5C770E6-6522-41F2-A503-62EA5B1891B2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D5C770E6-6522-41F2-A503-62EA5B1891B2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C8DABD0F-C07B-4DCF-9297-91320FC50EC2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C8DABD0F-C07B-4DCF-9297-91320FC50EC2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C8DABD0F-C07B-4DCF-9297-91320FC50EC2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C8DABD0F-C07B-4DCF-9297-91320FC50EC2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

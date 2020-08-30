@@ -3,12 +3,16 @@
   "projectName": "Arla",
   "domain": "https://www.arla.dk/",
   "startUrls": [
-    "https://www.arla.dk/sitemap.xml?type=Modules.Recipes.Business.SitemapUrlWriter.RecipeSitemapUrlWriter"
+    "https://www.arla.dk/opskrifter/temaer/aftensmad-pa-30-min/",
+	"https://www.arla.dk/opskrifter/temaer/hurtig-aftensmad-pa-20-min/",
+	"https://www.arla.dk/opskrifter/temaer/nem-aftensmad-paa-30-min/",
+	"https://www.arla.dk/opskrifter/temaer/pasta-til-aftensmad/",
+	"https://www.arla.dk/opskrifter/temaer/ag/"
   ],
   "isFixedListOfUrls": true,
   "jobs": [
     {
-      "name": "allRecipessd",
+      "name": "allRecipes",
       "nodes": [
         {
           "name": "recipe",

@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PortiaJsonOriented.Core.Models
+namespace PortiaJsonOriented.Models
 {
     public class Job
     {

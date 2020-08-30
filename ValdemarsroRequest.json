@@ -1,10 +1,12 @@
 {
+  "id": "0fd5bbc2-36eb-47de-837f-64f56b6e824a",
   "projectName": "Valdemarsro",
   "domain": "https://www.valdemarsro.dk/",
   "startUrls": [
     "https://www.valdemarsro.dk/aftensmad/"
   ],
   "isFixedListOfUrls": true,
+  "xpathForLoadMoreButton": "/html/body/div[3]/div[3]/div/div[4]/div/a",
   "jobs": [
     {
       "name": "allRecipes",
@@ -28,13 +30,13 @@
               "type": "string",
               "getMultipleFromPage": true,
               "isRequired": true,
-              "xpath": ".//*[@id='recipe-intro']/div[2]/div[4]/div[1]/ul/li[@itemprop='recipeIngredient']"
+              "xpath": "./div[2]/div/div[4]/div[2]/div[2]/div[4]/div[1]/ul/li[@itemprop='recipeIngredient']"
             },
             {
               "name": "image",
               "type": "object",
               "getMultipleFromPage": false,
-              "isRequired": false,
+              "isRequired": true,
               "xpath": "./div[2]/div/div[4]/div[1]/img",
               "attributes": [
                 {

@@ -1,22 +1,29 @@
 ﻿using Microsoft.AspNetCore.SignalR;
 using System.Threading.Tasks;
-using PortiaJsonOriented.Core.DTO;
 using Newtonsoft.Json;
 using System.IO;
 using Newtonsoft.Json.Schema;
 using System.Collections.Generic;
 using System;
-using PortiaJsonOriented.Core.Models;
+using PortiaJsonOriented.Models;
 using PuppeteerSharpForPortia;
-using System.Diagnostics;
-using System.Collections.Concurrent;
 using Newtonsoft.Json.Linq;
+using System.Linq;
+using PortiaJsonOriented;
+using PortiaJsonOriented.DTO;
+using PuppeteerSharp;
+using System.Management;
+using System.Diagnostics;
 
 namespace ExampleAPI
 {
     public class PortiaHub : Hub
     {
-        private static readonly Dictionary<Guid, ProjectCrawler> CrawlerProjectByIds = new Dictionary<Guid, ProjectCrawler>();
+        private static readonly Dictionary<Guid, ProjectCrawler> ProjectCrawlerById = new Dictionary<Guid, ProjectCrawler>();
+        public PortiaHub()
+        {
+
+        }
         public override async Task OnConnectedAsync()
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, "SignalR Users");
@@ -42,128 +49,206 @@ namespace ExampleAPI
                 throw new HubException("The json provided was invalid");
             }
 
-            if (CrawlerProjectByIds.ContainsKey(request.Id))
+            if (ProjectCrawlerById.ContainsKey(request.Id))
             {
                 throw new HubException("Project already registered");
             }
 
-            ProjectCrawler newCrawlerProject = new ProjectCrawler(request);
+            ProjectCrawler newProjectCrawler = new ProjectCrawler(request);
 
-            if (CrawlerProjectByIds.TryAdd(newCrawlerProject.PortiaRequest.Id, newCrawlerProject) == false)
+
+            if (ProjectCrawlerById.TryAdd(newProjectCrawler.portiaRequest.Id, newProjectCrawler) == false)
             {
                 throw new HubException("Project registration failed");
             }
-            await Clients.All.SendAsync("RegisterProjectReply", "Project registered");
+            await Clients.All.SendAsync("RegisterProjectReply", newProjectCrawler.portiaRequest);
         }
 
-
-        public async Task StartProjectMessage(Guid id)
+        public async IAsyncEnumerable<object> GetProgress(Guid id)
         {
-            CrawlerProjectByIds.TryGetValue(id, out ProjectCrawler crawlerProject);
+            ProjectCrawlerById.TryGetValue(id, out ProjectCrawler projectCrawler);
+            if (projectCrawler == null)
+            {
+                throw new HubException("Project not registered");
+            }
+
+            do
+            {
+                yield return new
+                {
+                    VisitedUrlsCount = projectCrawler.logOfAllVisitedUrls.Count,
+                    TotalQueuedUrlsCount = projectCrawler.urlsToFixedList.Count + projectCrawler.logOfAllQueuedUrls.Count,
+                    IsRunning = projectCrawler.IsCrawling
+                };
+                await Task.Delay(1000);
+            }
+            while (projectCrawler.IsCrawling);
+        }
+
+        public async Task ToggleProjectMessage(Guid id)
+        {
+            ProjectCrawlerById.TryGetValue(id, out ProjectCrawler crawlerProject);
             if (crawlerProject == null)
             {
                 throw new HubException("Project not registered");
             }
 
-            await crawlerProject.StartAsync();
-            await Clients.All.SendAsync("StartProjectReply", "Project started");
-        }
-
-        public async Task StopProjectMessage(Guid id)
-        {
-            CrawlerProjectByIds.TryGetValue(id, out ProjectCrawler crawlerProject);
-            if (crawlerProject == null)
+            try
             {
-                throw new HubException("Project not registered");
+                if (crawlerProject.Crawler == null)
+                {
+                    crawlerProject.Start();
+                }
+                else if(crawlerProject.Crawler.Status == TaskStatus.WaitingForActivation)
+                {
+                    await crawlerProject.StopAsync();
+                }
             }
-
-            await crawlerProject.StopAsync();
-            await Clients.All.SendAsync("StopProjectReply", "Project stopped");
+            catch (Exception ex)
+            {
+                throw new HubException(ex.ToString());
+            }
         }
 
     }
-    public class ProjectCrawler
+    public class ProjectCrawler : PortiaCore
     {
-        private ConcurrentDictionary<string, JArray> dataByJobName = new ConcurrentDictionary<string, JArray>();
-        private List<string> xpathsToWaitFor = new List<string>();
-        public PortiaRequest PortiaRequest { get; set; }
-        public PuppeteerWrapper PuppeteerWrapper { get; set; }
-        public ProjectCrawler(PortiaRequest portiaRequest)
+        public Task Crawler { get; set; } = null;
+        public bool IsCrawling { get; set; } = false;
+        public bool IsTerminated { get; set; } = false;
+        public List<string> xpathsToWaitFor = new List<string>();
+        public int maxConcurrentDownload = 3; // Should be in the puppeteerWrapper
+        public ProjectCrawler(PortiaRequest request)
         {
-            PortiaRequest = portiaRequest;
-            PortiaRequest.Jobs.ForEach((job) =>
+            portiaRequest = request;
+            portiaRequest.Jobs.ForEach((job) =>
             {
                 dataByJobName.TryAdd(job.Name, new JArray());// Initialize a new Key-value Pair for each Job.
                 job.Nodes.ForEach(jobNode => xpathsToWaitFor.AddRange(GetAllXpath(jobNode))); // Creates the list of xpathsToWaitFor.
             });
+
+            // Configure which crawler to use:
+            if (portiaRequest.IsFixedListOfUrls) // static list
+            {
+                FilterAndAddUrls(portiaRequest.StartUrls, ref urlsToFixedList);
+            }
+            else // traversable
+            {
+                FilterAndAddUrls(portiaRequest.StartUrls, ref currentQueuedUrls);
+            }
+
         }
+        public async Task CrawlerForFixedListOfUrls()
+        {
+            IsCrawling = true;
+            puppeteerWrapper = await PuppeteerWrapper.CreateAsync(xpathsToWaitFor, "");
+            List<Task> runningTasks = new List<Task>();
+            while (urlsToFixedList.Any() && IsTerminated == false || runningTasks.Any())
+            {
+                if (runningTasks.Count > 0)
+                {
+                    var firstCompletedTask = await Task.WhenAny(runningTasks);
+                    runningTasks.Remove(firstCompletedTask);
+                }
+                while (urlsToFixedList.Any() && IsTerminated == false && runningTasks.Count < maxConcurrentDownload)
+                {
+                    if (urlsToFixedList.TryTake(out Uri url))
+                    {
+                        runningTasks.Add(ParseUrlsAndObjectsFromUrl(url));
+                    }
+                }
+                await Task.Delay(1000);
+            }
+            while (currentQueuedUrls.Any() && IsTerminated == false || runningTasks.Any())
+            {
+                if (runningTasks.Count > 0)
+                {
+                    var firstCompletedTask = await Task.WhenAny(runningTasks);
+                    runningTasks.Remove(firstCompletedTask);
+                }
+                while (currentQueuedUrls.Any() && IsTerminated == false && runningTasks.Count < maxConcurrentDownload)
+                {
+                    if (currentQueuedUrls.TryTake(out Uri url))
+                    {
+                        runningTasks.Add(ParseObjectsFromUrl(url));
+                    }
+                }
+                await Task.Delay(1000);
+            }
+            IsCrawling = false;
+            await puppeteerWrapper.DisposeAsync();
+        }
+        public async Task CrawlerTraversableListOfUrls()
+        {
+            IsCrawling = true;
+            puppeteerWrapper = await PuppeteerWrapper.CreateAsync(xpathsToWaitFor,"");
+            List<Task> runningTasks = new List<Task>();
+            while (currentQueuedUrls.Any() && IsTerminated == false || runningTasks.Any())
+            {
+                if (runningTasks.Count > 0)
+                {
+                    var firstCompletedTask = await Task.WhenAny(runningTasks);
+                    runningTasks.Remove(firstCompletedTask);
+                }
+                while (currentQueuedUrls.Any() && IsTerminated == false && runningTasks.Count < maxConcurrentDownload)
+                {
+                    if (currentQueuedUrls.TryTake(out Uri url))
+                    {
+                        runningTasks.Add(ParseUrlsAndObjectsFromUrl(url));
+                    }
+                    await Task.Delay(10);
+                }
+                await Task.Delay(10);
+            }
+            IsCrawling = false;
+            await puppeteerWrapper.DisposeAsync();
+        }
+
         public void Start()
         {
-            Task.Run(async () => await StartAsync());
-        }
-        public async Task StartAsync()
-        {
-            PuppeteerWrapper = await PuppeteerWrapper.CreateAsync(xpathsToWaitFor);
-
-            await PuppeteerWrapper.GetHtmlContentAsync(new Uri("https://www.arla.dk/"));
-
-            //if (PuppeteerWrapper == null)
-            //{
-
-            //    await InitializeAsync();
-            //    await PuppeteerWrapper.GetHtmlContentAsync(new Uri("https://www.arla.dk/"));
-            //}
-            //else
-            //{
-            //    PuppeteerWrapper = null;
-            //}
-
-        }
-        public void Processor()
-        {
-
-        }
-        public async Task StopAsync()
-        {
-            await PuppeteerWrapper.DisposeAsync();
-        }
-
-
-        private static List<string> GetAllXpath(NodeAttribute node)
-        {
-            List<string> xpaths = new List<string>();
-            CreateAbsoluteXpathsRecursively(ref xpaths, node);
-            return xpaths;
-
-        }
-        private static void CreateAbsoluteXpathsRecursively(ref List<string> xpaths, NodeAttribute node, string currentXpath = "")
-        {
-            string nodeXpath = node.Xpath;
-            if (currentXpath != "")
+            if (Crawler == null)
             {
-                nodeXpath = nodeXpath.Replace("./", "/"); //removes relative prefix and prepares xpath for absolute path
-            }
-            currentXpath += nodeXpath;
-            if (node.Attributes == null)
-            {
-                xpaths.Add(currentXpath);
-            }
-            else
-            {
-                foreach (var attribute in node.Attributes)
+                IsTerminated = false;
+                if (portiaRequest.IsFixedListOfUrls) // static list
                 {
-                    CreateAbsoluteXpathsRecursively(ref xpaths, attribute, currentXpath);
+                    Crawler = CrawlerForFixedListOfUrls();
+                }
+                else // traversable
+                {
+                    Crawler = CrawlerTraversableListOfUrls();
                 }
             }
+            else if (Crawler.Status == TaskStatus.WaitingForActivation)
+            {
+                throw new Exception("Crawler task is already started");
+            }
+            else if (Crawler.Status == TaskStatus.RanToCompletion)
+            {
+                throw new Exception("Crawler task is Completed");
+            }
         }
-    }
-    public class Test
-    {
-        public Guid Id { get; set; }
-        public string ProjectName { get; set; }
-        public Uri Domain { get; set; }
-        public List<Uri> StartUrls { get; set; }
-        public bool IsFixedListOfUrls { get; set; }
-        public List<Job> Jobs { get; set; }
+
+        public async Task StopAsync()
+        {
+            if (Crawler == null)
+            {
+                throw new Exception("No Crawler task exists");
+            }
+            else if (Crawler.Status == TaskStatus.WaitingForActivation)
+            {
+                IsTerminated = true;
+                await Crawler.ContinueWith((x) =>
+                {
+                    Crawler.Dispose();
+                    Crawler = null;
+                });
+            }
+            else if (Crawler.Status == TaskStatus.RanToCompletion)
+            {
+                throw new Exception("Crawler task is already Completed");
+            }
+
+        }
+
     }
 }

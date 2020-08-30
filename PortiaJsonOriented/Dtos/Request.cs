@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using PortiaJsonOriented.Core.Models;
+using PortiaJsonOriented.Models;
 
-namespace PortiaJsonOriented.Core.DTO
+namespace PortiaJsonOriented.DTO
 {
     public class PortiaRequest // Should requests be immutable?
     {
@@ -11,9 +11,7 @@ namespace PortiaJsonOriented.Core.DTO
         public Uri Domain { get; set; }
         public List<Uri> StartUrls { get; set; }
         public bool IsFixedListOfUrls { get; set; }
-
-        // TODO CrawlerSettings
-        //// return List of objects after every x object found. 0 being unlimited
+        public string XpathForLoadMoreButton { get; set; }
         public List<Job> Jobs { get; set; }
     }
 }

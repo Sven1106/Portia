@@ -11,12 +11,12 @@
 //using System.Threading.Tasks;
 //using System.Xml.XPath;
 //using PuppeteerSharp;
-//using PortiaJsonOriented.Core.Models;
+//using PortiaJsonOriented.Models;
 //using Task = System.Threading.Tasks.Task;
-//using PortiaTask = PortiaJsonOriented.Core.Models.Job;
-//using PortiaResponse = PortiaJsonOriented.Core.DTO.PortiaResponse;
-//using PortiaRequest = PortiaJsonOriented.Core.DTO.PortiaRequest;
-//using PortiaJsonOriented.Core;
+//using PortiaTask = PortiaJsonOriented.Models.Job;
+//using PortiaResponse = PortiaJsonOriented.DTO.PortiaResponse;
+//using PortiaRequest = PortiaJsonOriented.DTO.PortiaRequest;
+//using PortiaJsonOriented;
 //using System.Threading.Tasks.Dataflow;
 //using System.Net;
 

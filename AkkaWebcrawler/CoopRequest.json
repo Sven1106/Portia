@@ -1,11 +1,13 @@
 {
+  "projectId": "bab896e2-29ea-456c-ba92-06c628982829",
   "projectName": "Coop",
   "domain": "https://opskrifter.coop.dk/",
   "startUrls": [
     "https://opskrifter.coop.dk/temaer/nem-og-hurtig-aftensmad"
   ],
   "isFixedListOfUrls": true,
-  "jobs": [
+  "XpathForAcceptCookiesButton": "/html/body/div[1]/div/div/div[1]/div[2]/div[1]/button[1]",
+  "crawlerSchemas": [
     {
       "name": "allRecipes",
       "nodes": [
@@ -28,7 +30,7 @@
               "type": "string",
               "getMultipleFromPage": true,
               "isRequired": true,
-              "xpath": "./div[2]/div/div[3]/section[2]/div[1]/div/div[3]/div/ul/li/span/div/span/text()"
+              "xpath": "./div/div/div/section/div/div/div/div/ul/li/span/div/span/text()"
             },
             {
               "name": "image",

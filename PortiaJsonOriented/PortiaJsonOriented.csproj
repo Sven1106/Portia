@@ -59,17 +59,17 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Core\CrashDump.cs" />
-    <Compile Include="Core\Helper.cs" />
-    <Compile Include="Core\Models\Metadata.cs" />
-    <Compile Include="Core\Models\NodeAttribute.cs" />
-    <Compile Include="Core\Dtos\Request.cs" />
-    <Compile Include="Core\Dtos\Response.cs" />
-    <Compile Include="Core\Models\Task.cs" />
-    <Compile Include="Core\Models\NodeType.cs" />
-    <Compile Include="Core\WebcrawlerOld.cs" />
-    <Compile Include="Core\WebcrawlerSimple.cs" />
-    <Compile Include="Core\WebcrawlerTPL.cs" />
+    <Compile Include="PortiaCore.cs" />
+    <Compile Include="CrashDump.cs" />
+    <Compile Include="Models\Metadata.cs" />
+    <Compile Include="Models\NodeAttribute.cs" />
+    <Compile Include="Dtos\Request.cs" />
+    <Compile Include="Dtos\Response.cs" />
+    <Compile Include="Models\Job.cs" />
+    <Compile Include="Models\NodeType.cs" />
+    <Compile Include="WebcrawlerOld.cs" />
+    <Compile Include="WebcrawlerSimple.cs" />
+    <Compile Include="WebcrawlerTPL.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

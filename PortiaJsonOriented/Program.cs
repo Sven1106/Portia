@@ -3,8 +3,8 @@ using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Schema;
 using Newtonsoft.Json.Serialization;
-using PortiaJsonOriented.Core;
-using PortiaJsonOriented.Core.DTO;
+using PortiaJsonOriented;
+using PortiaJsonOriented.DTO;
 using System;
 using System.Collections;
 using System.Collections.Concurrent;
@@ -21,7 +21,7 @@ namespace PortiaJsonOriented
         static async Task Main(string[] args)
         {
             string solutionRootPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), @"..\..\..\"));
-            var json = File.ReadAllText(Path.Combine(solutionRootPath, "ValdemarsroRequest.json"));
+            var json = File.ReadAllText(Path.Combine(solutionRootPath, "CoopRequest.json"));
 
             JSchemaValidatingReader jSchemaReader = new JSchemaValidatingReader(new JsonTextReader(new StringReader(json)));
             jSchemaReader.Schema = JSchema.Parse(File.ReadAllText(Path.Combine(solutionRootPath, "requestSchema.json")));

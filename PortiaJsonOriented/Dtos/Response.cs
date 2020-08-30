@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PortiaJsonOriented.Core.DTO
+namespace PortiaJsonOriented.DTO
 {
     public class PortiaResponse
     {
