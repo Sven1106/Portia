@@ -8,8 +8,10 @@ namespace AkkaWebcrawler
         {
             lock (_MessageLock)
             {
+                ConsoleColor previousColor = Console.ForegroundColor;
                 Console.ForegroundColor = color;
                 Console.WriteLine(message);
+                Console.ForegroundColor = previousColor;
             }
         }
     }

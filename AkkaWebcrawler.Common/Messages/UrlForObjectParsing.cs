@@ -6,12 +6,12 @@ using System.Threading.Tasks;
 
 namespace AkkaWebcrawler.Common.Messages
 {
-    public class ParsedUrls
+    public class UrlForObjectParsing
     {
-        public List<Uri> Urls { get; private set; }
-        public ParsedUrls(List<Uri> urls)
+        public Uri Url { get; private set; }
+        public UrlForObjectParsing(Uri url)
         {
-            Urls = urls;
+            Url = url;
         }
     }
 }

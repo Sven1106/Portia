@@ -1,0 +1,63 @@
+{
+  "projectId": "bab896e2-29ea-456c-ba92-06c628982829",
+  "projectName": "Monosoft",
+  "domain": "http://monosoft.dk/",
+  "startUrls": [
+    "http://monosoft.dk/"
+  ],
+  "isFixedListOfUrls": false,
+  "XpathForAcceptCookiesButton": "/html/body/div[1]/div/div/div[1]/div[2]/div[1]/button[1]",
+  "crawlerSchemas": [
+    {
+      "name": "allRecipes",
+      "nodes": [
+        {
+          "name": "recipe",
+          "type": "object",
+          "getMultipleFromPage": false,
+          "isRequired": true,
+          "xpath": "//article[@class='recipe']",
+          "attributes": [
+            {
+              "name": "heading",
+              "type": "string",
+              "getMultipleFromPage": false,
+              "isRequired": true,
+              "xpath": "./header/div/div[2]/div[1]/div/div[1]/h1"
+            },
+            {
+              "name": "ingredients",
+              "type": "string",
+              "getMultipleFromPage": true,
+              "isRequired": true,
+              "xpath": "./div/div/div/section/div/div/div/div/ul/li/span/div/span/text()"
+            },
+            {
+              "name": "image",
+              "type": "object",
+              "getMultipleFromPage": false,
+              "isRequired": false,
+              "xpath": "./header/div/div[1]/div/img",
+              "attributes": [
+                {
+                  "name": "src",
+                  "type": "string",
+                  "getMultipleFromPage": false,
+                  "isRequired": false,
+                  "xpath": "./@src"
+                },
+                {
+                  "name": "alt",
+                  "type": "string",
+                  "getMultipleFromPage": false,
+                  "isRequired": false,
+                  "xpath": "./@alt"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

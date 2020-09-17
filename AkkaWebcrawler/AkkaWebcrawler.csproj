@@ -184,6 +184,9 @@
     <None Include="ArlaRequest.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Include="MonosoftRequest.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Include="CoopRequest.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>

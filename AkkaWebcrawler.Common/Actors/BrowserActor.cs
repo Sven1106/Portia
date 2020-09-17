@@ -11,7 +11,7 @@ namespace AkkaWebcrawler.Common.Actors
 {
     public class BrowserActor : ReceiveActor
     {
-        private int AmountOfPages { get; set; } = 1;
+        private int AmountOfPages { get; set; }
         private Browser Browser { get; set; }
         private string BrowserActorName { get; set; }
         private Queue<IActorRef> PageActors { get; set; }
@@ -20,6 +20,11 @@ namespace AkkaWebcrawler.Common.Actors
         {
             XpathConfiguration = xpathConfiguration;
             BrowserActorName = Self.Path.Name;
+            AmountOfPages = 3;
+            // TODO Add Chromium instance handling
+            // TODO Add Chromium instance handling
+            // TODO Add Chromium instance handling
+            // TODO Add Chromium instance handling
             // TODO Add Chromium instance handling
         }
 
@@ -67,18 +72,59 @@ namespace AkkaWebcrawler.Common.Actors
         private void Ready()
         {
             ColorConsole.WriteLine($"{BrowserActorName} has become Ready", ConsoleColor.Green);
-            Receive<UrlAndObjectParsing>(validUrl =>
+            Receive<UrlForUrlAndObjectParsing>(urlForUrlAndObjectParsing =>
             {
                 IActorRef page = PageActors.Dequeue();
-                page.Tell(validUrl);
+                page.Tell(urlForUrlAndObjectParsing);
                 PageActors.Enqueue(page);
             });
-            Receive<ObjectParsing>(validUrl =>
+            Receive<UrlForObjectParsing>(urlForObjectParsing =>
             {
                 IActorRef page = PageActors.Dequeue();
-                page.Tell(validUrl);
+                page.Tell(urlForObjectParsing);
                 PageActors.Enqueue(page);
             });
+        }
+
+        protected override SupervisorStrategy SupervisorStrategy()
+        {
+
+            return new OneForOneStrategy(
+                exception =>
+                {
+                    if (exception is PuppeteerException)
+                    {
+                        if (exception is ProcessException)
+                        {
+
+                        }
+                        else if (exception is EvaluationFailedException)
+                        {
+
+                        }
+                        else if (exception is MessageException)
+                        {
+
+                        }
+                        else if (exception is NavigationException) // Couldn't Navigate to url. Or Browser was disconnected //Target.detachedFromTarget
+                        {
+                            return Directive.Restart;
+                        }
+                        else if (exception is SelectorException)
+                        {
+
+                        }
+                        else if (exception is TargetClosedException) // Page was closed
+                        {
+                            return Directive.Restart;
+                        }
+                    }
+                    else if (exception is NullReferenceException)
+                    {
+                        return Directive.Escalate;
+                    }
+                    return Directive.Resume;
+                });
         }
 
         #region Lifecycle Hooks
@@ -102,30 +148,6 @@ namespace AkkaWebcrawler.Common.Actors
                 }
             });
             ColorConsole.WriteLine($"{BrowserActorName} PostStop", ConsoleColor.Green);
-        }
-
-        protected override SupervisorStrategy SupervisorStrategy()
-        {
-            return new OneForOneStrategy(
-                exception =>
-                {
-                    if (exception is PuppeteerException)
-                    {
-                        if (exception is ProcessException) // B
-                        {
-
-                        }
-                        if (exception is NavigationException) // Page was closed
-                        {
-                            return Directive.Restart;
-                        }
-                    }
-                    if (exception is NullReferenceException)
-                    {
-                        return Directive.Escalate;
-                    }
-                    return Directive.Resume;
-                });
         }
         #endregion
     }

@@ -24,10 +24,12 @@ namespace AkkaWebcrawler.Common.Actors
         private void Ready()
         {
             ColorConsole.WriteLine($"{ObjectParserActorName} has become Ready", ConsoleColor.White);
-            Receive<HtmlContent>(message =>
+            Receive<HtmlContent>(htmlContent =>
             {
+                ColorConsole.WriteLine($"{ObjectParserActorName} started parsing objects from: {htmlContent.SourceUrl}", ConsoleColor.White);
+
                 HtmlDocument htmlDoc = new HtmlDocument();
-                htmlDoc.LoadHtml(message.Html);
+                htmlDoc.LoadHtml(htmlContent.Html);
                 HtmlNode documentNode = htmlDoc.DocumentNode;
                 foreach (CrawlerSchema crawlerSchema in CrawlerSchemas) // TODO Find a better way to reference the job schemas
                 {
@@ -40,7 +42,7 @@ namespace AkkaWebcrawler.Common.Actors
                             continue;
                         }
                         objectFound.Add(node.Name, value);
-                        Metadata metadata = new Metadata(message.SourceUrl.ToString(), DateTime.UtcNow);
+                        Metadata metadata = new Metadata(htmlContent.SourceUrl.ToString(), DateTime.UtcNow);
                         objectFound.Add("metadata", JObject.FromObject(metadata, new JsonSerializer()
                         {
                             ContractResolver = new CamelCasePropertyNamesContractResolver()
@@ -51,8 +53,9 @@ namespace AkkaWebcrawler.Common.Actors
                         continue;
                     }
                     CrawledObjectContent crawledObjectContent = new CrawledObjectContent(crawlerSchema.Name, objectFound);
-                    Context.ActorSelection(ActorPaths.ProjectActor.Path).Tell(crawledObjectContent);
+                    Context.ActorSelection(ActorPaths.ObjectTrackerActor.Path).Tell(crawledObjectContent);
                 }
+                ColorConsole.WriteLine($"{ObjectParserActorName} finished parsing objects from: {htmlContent.SourceUrl}", ConsoleColor.White);
             });
         }
         private JToken GetValueForJTokenRecursively(NodeAttribute node, HtmlNode htmlNode) // TODO: see if it is possible to use the same HTMLNode/Htmldocument through out the extractions.

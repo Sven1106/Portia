@@ -23,12 +23,15 @@ namespace AkkaWebcrawler.Common.Actors
             ColorConsole.WriteLine($"{UrlParserActorName} has become Ready", ConsoleColor.Cyan);
             Receive<HtmlContent>(htmlContent =>
             {
-                ParsedUrls parsedUrls = ParseUrlsFromHtmlContent(htmlContent);
-                Context.ActorSelection(ActorPaths.ProjectActor.Path).Tell(parsedUrls);
+                ColorConsole.WriteLine($"{UrlParserActorName} started parsing urls from: {htmlContent.SourceUrl}", ConsoleColor.Cyan);
+                List<Uri> parsedUrls = ParseUrlsFromHtmlContent(htmlContent);
+                ColorConsole.WriteLine($"{UrlParserActorName} finished parsing urls from: {htmlContent.SourceUrl}", ConsoleColor.Cyan);
+                UnprocessedUrls unprocessedUrls = new UnprocessedUrls(parsedUrls);
+                Context.ActorSelection(ActorPaths.UrlTrackerActor.Path).Tell(unprocessedUrls);
             });
         }
 
-        private ParsedUrls ParseUrlsFromHtmlContent(HtmlContent htmlContent)
+        private List<Uri> ParseUrlsFromHtmlContent(HtmlContent htmlContent)
         {
             HtmlDocument htmlDoc = new HtmlDocument();
             htmlDoc.LoadHtml(htmlContent.Html);
@@ -61,7 +64,7 @@ namespace AkkaWebcrawler.Common.Actors
                     }
                 }
             }
-            return new ParsedUrls(urlsFound);
+            return urlsFound;
         }
 
         #region Lifecycle Hooks

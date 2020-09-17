@@ -11,8 +11,10 @@ namespace AkkaWebcrawler.Common
     public static class ActorPaths
     {
         public static readonly ActorMetaData ProjectActor = new ActorMetaData("Project");
+        public static readonly ActorMetaData BrowserActor = new ActorMetaData("Browser", ProjectActor);
         public static readonly ActorMetaData UrlParserActor = new ActorMetaData("UrlParser", ProjectActor);
+        public static readonly ActorMetaData UrlTrackerActor = new ActorMetaData("UrlTracker", ProjectActor);
         public static readonly ActorMetaData ObjectParserActor = new ActorMetaData("ObjectParser", ProjectActor);
-        public static readonly ActorMetaData BrowserParserActor = new ActorMetaData("Browser", ProjectActor);
+        public static readonly ActorMetaData ObjectTrackerActor = new ActorMetaData("ObjectTracker", ProjectActor);
     }
 }
