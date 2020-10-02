@@ -1,17 +1,14 @@
-﻿using Akka.Actor;
-using Akka.Dispatch;
-using AkkaWebcrawler.Common.Messages;
-using PortiaLib;
-using PuppeteerSharp;
-using PuppeteerSharp.Input;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.ExceptionServices;
-using System.Runtime.Serialization;
-using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
+using Akka.Actor;
+using Akka.Dispatch;
+using AkkaWebcrawler.Common.Messages;
+using AkkaWebcrawler.Common.Models;
+using AkkaWebcrawler.Common.Models.Deserialization;
+using PuppeteerSharp;
+using PuppeteerSharp.Input;
 
 namespace AkkaWebcrawler.Common.Actors
 {
@@ -77,32 +74,32 @@ namespace AkkaWebcrawler.Common.Actors
         private void Ready()
         {
             ColorConsole.WriteLine($"{PageActorName} has become Ready", ConsoleColor.Magenta);
-            ReceiveAsync<UrlForUrlAndObjectParsing>(async url =>
+            ReceiveAsync<UrlForUrlAndObjectParsingMessage>(async url =>
             {
                 ColorConsole.WriteLine($"{PageActorName} started downloading: {url.Url}", ConsoleColor.Magenta);
-                HtmlContent htmlContent = await GetHtmlContent(url.Url);
+                HtmlContentMessage htmlContent = await GetHtmlContent(url.Url);
                 ColorConsole.WriteLine($"{PageActorName} finished downloading: {url.Url}", ConsoleColor.Magenta);
-                Context.ActorSelection(ActorPaths.UrlParserActor.Path).Tell(htmlContent);
-                Context.ActorSelection(ActorPaths.ObjectParserActor.Path).Tell(htmlContent);
-                Context.ActorSelection(ActorPaths.UrlTrackerActor.Path).Tell(new VisitedUrl(htmlContent.SourceUrl));
+                Context.ActorSelection(ActorPaths.UrlParser).Tell(htmlContent);
+                //Context.ActorSelection(ActorPaths.ObjectParser).Tell(htmlContent);
+                //Context.ActorSelection(ActorPaths.UrlTracker).Tell(new ProcessedUrlMessage(htmlContent.SourceUrl));
             });
-            ReceiveAsync<UrlForObjectParsing>(async url =>
+            ReceiveAsync<UrlForObjectParsingMessage>(async url =>
             {
                 ColorConsole.WriteLine($"{PageActorName} started downloading: {url.Url}", ConsoleColor.Magenta);
-                HtmlContent htmlContent = await GetHtmlContent(url.Url);
+                HtmlContentMessage htmlContent = await GetHtmlContent(url.Url);
                 ColorConsole.WriteLine($"{PageActorName} finished downloading: {url.Url}", ConsoleColor.Magenta);
-                Context.ActorSelection(ActorPaths.ObjectParserActor.Path).Tell(htmlContent);
-                Context.ActorSelection(ActorPaths.UrlTrackerActor.Path).Tell(new VisitedUrl(htmlContent.SourceUrl));
+                Context.ActorSelection(ActorPaths.ObjectParser).Tell(htmlContent);
+                Context.ActorSelection(ActorPaths.UrlTracker).Tell(new ProcessedUrlMessage(htmlContent.SourceUrl));
             });
 
         }
 
-        private async Task<HtmlContent> GetHtmlContent(Uri url)
+        private async Task<HtmlContentMessage> GetHtmlContent(Uri url)
         {
             await Page.GoToAsync(url.ToString(), WaitUntilNavigation.Networkidle0);
             await InvokeXpathConfiguration();
             string html = await Page.GetContentAsync();
-            return new HtmlContent(url, html);
+            return new HtmlContentMessage(url, html);
         }
 
         private async Task InvokeXpathConfiguration() // TODO REFACTOR. THIS MESSES UP THE STACK TRACE ON EXCEPTIONS 

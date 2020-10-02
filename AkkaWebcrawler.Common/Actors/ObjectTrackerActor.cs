@@ -1,7 +1,7 @@
 ﻿using Akka.Actor;
 using AkkaWebcrawler.Common.Messages;
+using AkkaWebcrawler.Common.Models.Deserialization;
 using Newtonsoft.Json.Linq;
-using PortiaLib;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -11,22 +11,23 @@ namespace AkkaWebcrawler.Common.Actors
     public class ObjectTrackerActor : ReceiveActor // TODO Should be persistent actor.
     {
         private string ObjectTrackerActorName { get; set; }
-        private Dictionary<string, JArray> ObjectsByCrawlerSchemaName { get; set; } = new Dictionary<string, JArray>();
-        public ObjectTrackerActor(List<CrawlerSchema> crawlerSchemas)
+        private Dictionary<string, JArray> ObjectsByScraperSchemaName { get; set; } = new Dictionary<string, JArray>();
+        public ObjectTrackerActor(List<ScraperSchema> scraperSchemas)
         {
             ObjectTrackerActorName = Self.Path.Name;
-            crawlerSchemas.ForEach((crawlerSchema) =>
+            scraperSchemas.ForEach((scraperSchema) =>
             {
-                ObjectsByCrawlerSchemaName.Add(crawlerSchema.Name, new JArray());
+                ObjectsByScraperSchemaName.Add(scraperSchema.Name, new JArray());
             });
         }
 
         private void Ready()
         {
             ColorConsole.WriteLine($"{ObjectTrackerActorName} has become Ready", ConsoleColor.Yellow);
-            Receive<CrawledObjectContent>(message => // ObjectValidator
+            Receive<ObjectContentMessage>(message => // ObjectValidator
             {
-                ObjectsByCrawlerSchemaName[message.CrawlerSchemaName].Add(message.CrawledObject);
+                //TODO Check if object already exists
+                ObjectsByScraperSchemaName[message.ScraperSchemaName].Add(message.JObject);
             });
 
         }

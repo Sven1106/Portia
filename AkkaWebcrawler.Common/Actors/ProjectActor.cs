@@ -1,8 +1,9 @@
 ﻿using Akka.Actor;
 using AkkaWebcrawler.Common.Messages;
-
-using PortiaLib;
+using AkkaWebcrawler.Common.Models;
+using AkkaWebcrawler.Common.Models.Deserialization;
 using System;
+using System.Collections.Generic;
 
 namespace AkkaWebcrawler.Common.Actors
 {
@@ -12,16 +13,17 @@ namespace AkkaWebcrawler.Common.Actors
         public ProjectActor(ProjectDefinition projectDefinition)
         {
             ProjectActorName = Self.Path.Name;
+            List<ScraperSchema> scraperSchemas = projectDefinition.ScraperSchemas;
             XpathConfigurationForPuppeteer crawlerConfiguration = new XpathConfigurationForPuppeteer(projectDefinition);
-            Context.ActorOf(Props.Create<UrlParserActor>(), ActorPaths.UrlParserActor.Name); // TODO Add coordinator for scaling
-            Context.ActorOf(Props.Create<ObjectParserActor>(projectDefinition.CrawlerSchemas), ActorPaths.ObjectParserActor.Name); // TODO Add coordinator for scaling
-            Context.ActorOf(Props.Create<BrowserActor>(crawlerConfiguration), ActorPaths.BrowserActor.Name); // TODO Add coordinator for scaling
+            Context.ActorOf(Props.Create<UrlParserActor>(), ActorPaths.UrlParser.Name); // TODO Add coordinator for scaling
+            Context.ActorOf(Props.Create<ObjectParserActor>(scraperSchemas), ActorPaths.ObjectParser.Name); // TODO Add coordinator for scaling
+            Context.ActorOf(Props.Create<BrowserActor>(crawlerConfiguration), ActorPaths.Browser.Name); // TODO Add coordinator for scaling
 
             #region SingleTons
-            IActorRef urlTracker = Context.ActorOf(Props.Create<UrlTrackerActor>(projectDefinition), ActorPaths.UrlTrackerActor.Name); // there can NEVER be more than ONE instance!!!!
-            Context.ActorOf(Props.Create<ObjectTrackerActor>(projectDefinition.CrawlerSchemas), ActorPaths.ObjectTrackerActor.Name); // there can NEVER be more than ONE instance!!!!
+            IActorRef urlTracker = Context.ActorOf(Props.Create<UrlTrackerActor>(projectDefinition), ActorPaths.UrlTracker.Name); // there can NEVER be more than ONE instance!!!!
+            Context.ActorOf(Props.Create<ObjectTrackerActor>(scraperSchemas), ActorPaths.ObjectTracker.Name); // there can NEVER be more than ONE instance!!!!
             #endregion
-            urlTracker.Tell(new UnprocessedUrls(projectDefinition.StartUrls)); // START URL
+            urlTracker.Tell(new UnprocessedUrlsMessage(projectDefinition.StartUrls)); // START URL
         }
 
         private void Ready()

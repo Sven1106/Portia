@@ -1,5 +1,5 @@
 {
-  "id": "0fd5bbc2-36eb-47de-837f-64f56b6e824a",
+  "projectId": "a39483d0-9767-4188-bcc1-96348760a794",
   "projectName": "Valdemarsro",
   "domain": "https://www.valdemarsro.dk/",
   "startUrls": [
@@ -7,7 +7,7 @@
   ],
   "isFixedListOfUrls": true,
   "xpathForLoadMoreButton": "/html/body/div[3]/div[3]/div/div[4]/div/a",
-  "jobs": [
+  "scraperSchemas": [
     {
       "name": "allRecipes",
       "nodes": [

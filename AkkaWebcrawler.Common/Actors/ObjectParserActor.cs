@@ -1,10 +1,11 @@
 ﻿using Akka.Actor;
 using AkkaWebcrawler.Common.Messages;
+using AkkaWebcrawler.Common.Models;
+using AkkaWebcrawler.Common.Models.Deserialization;
 using HtmlAgilityPack;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
-using PortiaLib;
 using System;
 using System.Collections.Generic;
 using System.Xml.XPath;
@@ -14,27 +15,27 @@ namespace AkkaWebcrawler.Common.Actors
     public class ObjectParserActor : ReceiveActor
     {
         private string ObjectParserActorName { get; set; }
-        private List<CrawlerSchema> CrawlerSchemas { get; set; }
+        private List<ScraperSchema> ScraperSchemas { get; set; }
 
-        public ObjectParserActor(List<CrawlerSchema> crawlerSchemas)
+        public ObjectParserActor(List<ScraperSchema> scraperSchemas)
         {
-            CrawlerSchemas = crawlerSchemas;
+            ScraperSchemas = scraperSchemas;
             ObjectParserActorName = Self.Path.Name;
         }
         private void Ready()
         {
             ColorConsole.WriteLine($"{ObjectParserActorName} has become Ready", ConsoleColor.White);
-            Receive<HtmlContent>(htmlContent =>
+            Receive<HtmlContentMessage>(htmlContent =>
             {
                 ColorConsole.WriteLine($"{ObjectParserActorName} started parsing objects from: {htmlContent.SourceUrl}", ConsoleColor.White);
 
                 HtmlDocument htmlDoc = new HtmlDocument();
                 htmlDoc.LoadHtml(htmlContent.Html);
                 HtmlNode documentNode = htmlDoc.DocumentNode;
-                foreach (CrawlerSchema crawlerSchema in CrawlerSchemas) // TODO Find a better way to reference the job schemas
+                foreach (ScraperSchema scraperSchema in ScraperSchemas) // TODO Find a better way to reference the job schemas
                 {
                     JObject objectFound = new JObject();
-                    foreach (NodeAttribute node in crawlerSchema.Nodes)
+                    foreach (NodeAttribute node in scraperSchema.Nodes)
                     {
                         JToken value = GetValueForJTokenRecursively(node, documentNode);
                         if (value.ToString() == "")
@@ -52,8 +53,8 @@ namespace AkkaWebcrawler.Common.Actors
                     {
                         continue;
                     }
-                    CrawledObjectContent crawledObjectContent = new CrawledObjectContent(crawlerSchema.Name, objectFound);
-                    Context.ActorSelection(ActorPaths.ObjectTrackerActor.Path).Tell(crawledObjectContent);
+                    ObjectContentMessage scrapedObjectContent = new ObjectContentMessage(scraperSchema.Name, objectFound);
+                    Context.ActorSelection(ActorPaths.ObjectTracker).Tell(scrapedObjectContent);
                 }
                 ColorConsole.WriteLine($"{ObjectParserActorName} finished parsing objects from: {htmlContent.SourceUrl}", ConsoleColor.White);
             });

@@ -1,16 +1,12 @@
 {
-  "id": "0fd5bbc2-36eb-47de-837f-64f56b6e824a",
+  "projectId": "0fd5bbc2-36eb-47de-837f-64f56b6e824a",
   "projectName": "Arla",
   "domain": "https://www.arla.dk/",
   "startUrls": [
-    "https://www.arla.dk/opskrifter/temaer/aftensmad-pa-30-min/",
-	"https://www.arla.dk/opskrifter/temaer/hurtig-aftensmad-pa-20-min/",
-	"https://www.arla.dk/opskrifter/temaer/nem-aftensmad-paa-30-min/",
-	"https://www.arla.dk/opskrifter/temaer/pasta-til-aftensmad/",
-	"https://www.arla.dk/opskrifter/temaer/ag/"
+    "https://www.arla.dk/sitemap.xml?type=Modules.Recipes.Business.SitemapUrlWriter.RecipeSitemapUrlWriter"
   ],
   "isFixedListOfUrls": true,
-  "jobs": [
+  "scraperSchemas": [
     {
       "name": "allRecipes",
       "nodes": [

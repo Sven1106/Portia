@@ -1,0 +1,48 @@
+﻿@model Newtonsoft.Json.Schema.JSchema
+@{
+    ViewBag.Title = "Home Page";
+}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jsoneditor/8.6.5/jsoneditor.min.css" integrity="sha256-thQmdfrg82/N5u9ybMxam1RKdSfaxOPCgl5q9AI/mDI=" crossorigin="anonymous" />
+<div id="jsoneditor" style="width: 100%; height: 600px;"></div>
+<input type="button" value="register" id="registerBtn" />
+<ul id="projects"></ul>
+
+@section scripts {
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tinymce/5.2.1/tinymce.min.js" integrity="sha256-6Q5EaYOf1K2LsiwJmuGtmWHoT1X/kuXKnuZeGudWFB4=" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsoneditor/8.6.5/jsoneditor.min.js" integrity="sha256-wSC7O6XOfLcUshyeqXv+r8JrR2nn1O95z8s61JK7iTk=" crossorigin="anonymous"></script>
+    <script>
+        (async function () {
+            let json = "";
+            let registerBtn = document.getElementById("registerBtn")
+            registerBtn.disabled = true;
+
+            const schema = @Html.Raw(Model);
+            const container = document.getElementById("jsoneditor");
+            const options = {
+                schema: schema,
+                mode: 'code'
+            };
+            const editor = new JSONEditor(container, options);
+            const webcrawlerHub = $.connection.webcrawlerHub;
+            await $.connection.hub.start().then(() => {
+                document.getElementById("registerBtn").disabled = false;
+            }).catch(function (err) {
+                return console.error(err.toString());
+            });
+
+            document.getElementById('registerBtn').addEventListener('click', async () => {
+                json = editor.get();
+                console.log(json);
+                let isValid = editor.validateSchema(json);
+                if (isValid) {
+                    webcrawlerHub.server.createProject(JSON.stringify(json));
+                }
+            });
+            $.connection.hub.disconnected(() => {
+                setTimeout(function () {
+                    $.connection.hub.start();
+                }, 5000);
+            });
+        })();
+    </script>
+}

@@ -7,7 +7,7 @@
     "domain",
     "startUrls",
     "isFixedListOfUrls",
-    "jobs"
+    "scraperSchemas"
   ],
   "properties": {
     "projectName": {
@@ -28,7 +28,7 @@
     "isFixedListOfUrls": {
       "type": "boolean"
     },
-    "jobs": {
+    "scraperSchemas": {
       "type": "array",
       "items": {
         "$ref": "#/definitions/job"

@@ -1,6 +1,7 @@
 ﻿using Akka.Actor;
 using Akka.Dispatch;
 using AkkaWebcrawler.Common.Messages;
+using AkkaWebcrawler.Common.Models;
 using Newtonsoft.Json;
 using PuppeteerSharp;
 using System;
@@ -60,11 +61,11 @@ namespace AkkaWebcrawler.Common.Actors
                 };
             var launchOptions = new LaunchOptions { Headless = false, Args = args, IgnoreHTTPSErrors = true };
             Browser = await Puppeteer.LaunchAsync(launchOptions);
-            //Browser = await Puppeteer.ConnectAsync(new ConnectOptions() { BrowserWSEndpoint = "wss://chrome.browserless.io", IgnoreHTTPSErrors = true });
+            // Browser = await Puppeteer.ConnectAsync(new ConnectOptions() { BrowserWSEndpoint = "wss://chrome.browserless.io", IgnoreHTTPSErrors = true });
             string webSocket = Browser.WebSocketEndpoint;
             for (int i = 0; i < AmountOfPages; i++)
             {
-                IActorRef page = Context.ActorOf(Props.Create<PageActor>(webSocket, XpathConfiguration), $"Page_{i}");
+                IActorRef page = Context.ActorOf(Props.Create<PageActor>(webSocket, XpathConfiguration), ActorPaths.Page.Name);
                 PageActors.Enqueue(page);
             }
         }
@@ -72,16 +73,16 @@ namespace AkkaWebcrawler.Common.Actors
         private void Ready()
         {
             ColorConsole.WriteLine($"{BrowserActorName} has become Ready", ConsoleColor.Green);
-            Receive<UrlForUrlAndObjectParsing>(urlForUrlAndObjectParsing =>
+            Receive<UrlForUrlAndObjectParsingMessage>(urlForUrlAndObjectParsing =>
             {
                 IActorRef page = PageActors.Dequeue();
-                page.Tell(urlForUrlAndObjectParsing);
+                page.Forward(urlForUrlAndObjectParsing);
                 PageActors.Enqueue(page);
             });
-            Receive<UrlForObjectParsing>(urlForObjectParsing =>
+            Receive<UrlForObjectParsingMessage>(urlForObjectParsing =>
             {
                 IActorRef page = PageActors.Dequeue();
-                page.Tell(urlForObjectParsing);
+                page.Forward(urlForObjectParsing);
                 PageActors.Enqueue(page);
             });
         }

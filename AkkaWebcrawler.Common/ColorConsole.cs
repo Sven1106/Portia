@@ -1,5 +1,5 @@
 ﻿using System;
-namespace AkkaWebcrawler
+namespace AkkaWebcrawler.Common
 {
     public static class ColorConsole
     {

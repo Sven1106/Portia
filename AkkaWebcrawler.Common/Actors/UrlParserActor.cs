@@ -1,5 +1,6 @@
 ﻿using Akka.Actor;
 using AkkaWebcrawler.Common.Messages;
+using AkkaWebcrawler.Common.Models;
 using HtmlAgilityPack;
 using System;
 using System.Collections.Generic;
@@ -21,17 +22,17 @@ namespace AkkaWebcrawler.Common.Actors
         private void Ready()
         {
             ColorConsole.WriteLine($"{UrlParserActorName} has become Ready", ConsoleColor.Cyan);
-            Receive<HtmlContent>(htmlContent =>
+            Receive<HtmlContentMessage>(htmlContent =>
             {
                 ColorConsole.WriteLine($"{UrlParserActorName} started parsing urls from: {htmlContent.SourceUrl}", ConsoleColor.Cyan);
                 List<Uri> parsedUrls = ParseUrlsFromHtmlContent(htmlContent);
                 ColorConsole.WriteLine($"{UrlParserActorName} finished parsing urls from: {htmlContent.SourceUrl}", ConsoleColor.Cyan);
-                UnprocessedUrls unprocessedUrls = new UnprocessedUrls(parsedUrls);
-                Context.ActorSelection(ActorPaths.UrlTrackerActor.Path).Tell(unprocessedUrls);
+                UnprocessedUrlsMessage unprocessedUrls = new UnprocessedUrlsMessage(parsedUrls);
+                Context.ActorSelection(ActorPaths.UrlTracker).Tell(unprocessedUrls);
             });
         }
 
-        private List<Uri> ParseUrlsFromHtmlContent(HtmlContent htmlContent)
+        private List<Uri> ParseUrlsFromHtmlContent(HtmlContentMessage htmlContent)
         {
             HtmlDocument htmlDoc = new HtmlDocument();
             htmlDoc.LoadHtml(htmlContent.Html);
