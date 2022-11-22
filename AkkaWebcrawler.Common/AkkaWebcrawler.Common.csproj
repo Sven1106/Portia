@@ -5,7 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Akka" Version="1.4.10" />
+    <PackageReference Include="Akka" Version="1.4.46" />
     <PackageReference Include="HtmlAgilityPack" Version="1.11.24" />
     <PackageReference Include="PuppeteerSharp" Version="2.0.4" />
   </ItemGroup>
